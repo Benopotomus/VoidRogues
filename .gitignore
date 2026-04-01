@@ -1,5 +1,22 @@
-# This .gitignore file should be placed at the root of your Unity project directory
-#
+# ── OS / IDE ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*~
+
+# JetBrains Rider / IntelliJ
+.idea/
+*.iml
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# Visual Studio
+.vs/
+
+# ── Unity ─────────────────────────────────────────────────────────────────────
 # Get latest from https://github.com/github/gitignore/blob/main/Unity.gitignore
 #
 .utmp/
