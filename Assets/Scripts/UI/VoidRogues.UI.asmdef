@@ -1,0 +1,20 @@
+{
+    "name": "VoidRogues.UI",
+    "rootNamespace": "VoidRogues.UI",
+    "references": [
+        "Fusion.Runtime",
+        "Unity.TextMeshPro",
+        "VoidRogues.GameFlow",
+        "VoidRogues.Enemies",
+        "VoidRogues.Player"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

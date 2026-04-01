@@ -1,0 +1,19 @@
+{
+    "name": "VoidRogues.GameFlow",
+    "rootNamespace": "VoidRogues.GameFlow",
+    "references": [
+        "Fusion.Runtime",
+        "VoidRogues.Enemies",
+        "VoidRogues.Props",
+        "VoidRogues.Projectiles"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

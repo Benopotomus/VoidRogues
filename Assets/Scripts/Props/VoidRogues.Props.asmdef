@@ -1,0 +1,18 @@
+{
+    "name": "VoidRogues.Props",
+    "rootNamespace": "VoidRogues.Props",
+    "references": [
+        "Fusion.Runtime",
+        "VoidRogues.Enemies",
+        "VoidRogues.Player"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
