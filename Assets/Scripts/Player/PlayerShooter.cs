@@ -61,7 +61,7 @@ namespace VoidRogues.Player
             if (!Runner.TryGetInputForPlayer<NetworkInputData>(Object.InputAuthority, out var input))
                 return;
 
-            bool wantFire = input.Buttons.IsSet(InputButton.Fire);
+            bool wantFire = input.FireHeld;
             if (wantFire && Runner.Tick >= _nextFireTick)
             {
                 Fire(input.AimWorldPos);

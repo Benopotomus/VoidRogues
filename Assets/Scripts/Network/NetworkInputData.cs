@@ -6,6 +6,12 @@ namespace VoidRogues.Network
     /// <summary>
     /// Input struct sent from client to host every simulation tick.
     /// Must remain blittable – no managed references.
+    ///
+    /// Follows the Hallowheart / LichLord pattern: every button has a one-frame
+    /// pressed field (set on the frame the button is first pressed) and a held
+    /// field (true while the button is held down).  The one-frame fields are
+    /// accumulated across render frames with |= and reset by the input provider
+    /// after each Fusion tick via <see cref="NetworkInputProvider.ResetInput"/>.
     /// </summary>
     public struct NetworkInputData : INetworkInput
     {
@@ -13,20 +19,21 @@ namespace VoidRogues.Network
         public Vector2 Move;
 
         /// <summary>
-        /// Mouse world position (used by <see cref="VoidRogues.Player.PlayerShooter"/>
-        /// to derive aim direction by subtracting player position).
+        /// Mouse world position used by <see cref="VoidRogues.Player.PlayerShooter"/>
+        /// to derive the aim direction (mouse world pos minus player pos).
         /// </summary>
         public Vector2 AimWorldPos;
 
-        /// <summary>Bitfield for button states (Fire, Interact, Reload …).</summary>
-        public NetworkButtons Buttons;
-    }
+        // ── Fire ────────────────────────────────────────────────────────────
+        /// <summary>True on the frame the Fire button was first pressed.</summary>
+        public bool Fire;
+        /// <summary>True every frame while the Fire button is held.</summary>
+        public bool FireHeld;
 
-    /// <summary>Bit indices for <see cref="NetworkInputData.Buttons"/>.</summary>
-    public enum InputButton
-    {
-        Fire     = 0,
-        Interact = 1,
-        Reload   = 2,
+        // ── Interact ────────────────────────────────────────────────────────
+        /// <summary>True on the frame the Interact button was first pressed.</summary>
+        public bool Interact;
+        /// <summary>True every frame while the Interact button is held.</summary>
+        public bool InteractHeld;
     }
 }

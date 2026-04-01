@@ -20,13 +20,21 @@ namespace VoidRogues.Network
         [SerializeField] private string _defaultSessionName = "VoidRogues";
         [SerializeField] private int    _maxPlayers         = 4;
 
+        [Header("Editor Quick-Start")]
+        [Tooltip("When true the editor auto-start skips the Ship hub and loads the " +
+                 "Mission scene (Build Index 2) directly, matching the MissionLauncher flow.")]
+        [SerializeField] private bool _skipToMission = false;
+
         private NetworkRunner _runner;
 
         private void Start()
         {
 #if UNITY_EDITOR
-            // In the Editor, auto-start as Host for fast iteration.
-            StartSession(GameMode.Host, _defaultSessionName).Forget();
+            // In the Editor, auto-start as Host.
+            // Set _skipToMission = true to bypass the Ship hub and go straight to
+            // Mission (Build Index 2) – mirrors the MissionLauncher direct-launch flow.
+            int targetScene = _skipToMission ? 2 : 1;
+            StartSession(GameMode.Host, _defaultSessionName, targetScene).Forget();
 #endif
         }
 
@@ -35,22 +43,22 @@ namespace VoidRogues.Network
         // ------------------------------------------------------------------
 
         public void StartHost(string sessionName) =>
-            StartSession(GameMode.Host, sessionName).Forget();
+            StartSession(GameMode.Host, sessionName, 1).Forget();
 
         public void StartClient(string sessionName) =>
-            StartSession(GameMode.Client, sessionName).Forget();
+            StartSession(GameMode.Client, sessionName, 1).Forget();
 
         // ------------------------------------------------------------------
         // Session startup
         // ------------------------------------------------------------------
 
-        private async Task StartSession(GameMode mode, string sessionName)
+        private async Task StartSession(GameMode mode, string sessionName, int targetSceneIndex)
         {
             _runner = Instantiate(_runnerPrefab);
             _runner.AddCallbacks(this);
             _runner.ProvideInput = true;
 
-            var scene = SceneRef.FromIndex(1); // Ship scene
+            var scene = SceneRef.FromIndex(targetSceneIndex);
 
             var result = await _runner.StartGame(new StartGameArgs
             {
