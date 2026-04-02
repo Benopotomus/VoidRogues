@@ -58,11 +58,12 @@ namespace VoidRogues.UI
 
         private void TryFindLocalPlayer()
         {
-            // Find the PlayerController that has input authority over the local machine.
+            // Find the PlayerController whose co-located NetworkBehaviour has local input authority.
             var players = FindObjectsOfType<Player.PlayerController>();
             foreach (var p in players)
             {
-                if (p.Object != null && p.Object.HasInputAuthority)
+                var nb = p.GetComponent<NetworkBehaviour>();
+                if (nb != null && nb.HasInputAuthority)
                 {
                     _localPlayer = p;
                     return;

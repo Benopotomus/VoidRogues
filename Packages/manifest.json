@@ -1,10 +1,23 @@
 {
+  "scopedRegistries": [
+    {
+      "name": "Photon Engine",
+      "url": "https://package.photon.io",
+      "scopes": [
+        "com.photon",
+        "com.exitgames"
+      ]
+    }
+  ],
   "dependencies": {
     "com.unity.inputsystem": "1.7.0",
     "com.unity.render-pipelines.universal": "14.0.9",
     "com.unity.cinemachine": "2.9.7",
     "com.unity.2d.tilemap.extras": "3.1.2",
     "com.unity.textmeshpro": "3.0.6",
-    "com.unity.test-framework": "1.3.9"
+    "com.unity.test-framework": "1.3.9",
+    "com.photon.fusion": "2.0.6",
+    "com.photon.fusion.physics": "2.0.6",
+    "com.photon.realtime": "5.0.9"
   }
 }

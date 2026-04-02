@@ -151,10 +151,10 @@ namespace VoidRogues.Projectiles
                 }
 
                 // Damage players (friendly fire / enemies can shoot too).
-                var player = hit.GetComponent<PlayerController>();
-                if (player != null)
+                var damageable = hit.GetComponent<VoidRogues.Combat.IDamageable>();
+                if (damageable != null && damageable.IsAlive)
                 {
-                    player.TakeDamage(damage);
+                    damageable.ApplyDamage(damage);
                     state.DidHit  = true;
                     state.IsActive = false;
                     return;

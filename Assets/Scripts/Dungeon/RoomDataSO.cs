@@ -1,4 +1,5 @@
 using UnityEngine;
+using VoidRogues.Core;
 
 namespace VoidRogues.Dungeon
 {
