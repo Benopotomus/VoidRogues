@@ -4,8 +4,8 @@
     "references": [
         "Fusion.Runtime",
         "VoidRogues.Enemies",
-        "VoidRogues.Player",
-        "VoidRogues.Props"
+        "VoidRogues.Props",
+        "VoidRogues.Shared"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

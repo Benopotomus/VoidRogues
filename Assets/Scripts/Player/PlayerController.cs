@@ -33,6 +33,12 @@ namespace VoidRogues.Player
         private float _dodgeTimer;
         private float _dodgeCooldownTimer;
 
+        /// <summary>True while the player has health remaining.</summary>
+        public bool IsAlive => _health != null && _health.IsAlive;
+
+        /// <summary>Current sanity (health) value.</summary>
+        public int Health => _health != null ? _health.CurrentSanity : 0;
+
         private static readonly int AnimMoveX    = Animator.StringToHash("MoveX");
         private static readonly int AnimMoveY    = Animator.StringToHash("MoveY");
         private static readonly int AnimMoving   = Animator.StringToHash("IsMoving");

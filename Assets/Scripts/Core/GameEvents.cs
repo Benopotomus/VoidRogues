@@ -35,7 +35,7 @@ namespace VoidRogues.Core
     /// <summary>Fired when the player enters a new room.</summary>
     public struct RoomEnteredEvent
     {
-        public VoidRogues.Dungeon.RoomType RoomType;
+        public RoomType RoomType;
     }
 
     // ── Combat events ─────────────────────────────────────────────────────────

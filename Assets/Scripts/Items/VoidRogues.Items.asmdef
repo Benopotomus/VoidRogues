@@ -1,10 +1,8 @@
 {
-    "name": "VoidRogues.Props",
-    "rootNamespace": "VoidRogues.Props",
+    "name": "VoidRogues.Items",
+    "rootNamespace": "VoidRogues.Items",
     "references": [
-        "Fusion.Runtime",
-        "VoidRogues.Enemies",
-        "VoidRogues.Shared"
+        "VoidRogues.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

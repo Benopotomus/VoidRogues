@@ -5,7 +5,10 @@
         "Fusion.Runtime",
         "Unity.InputSystem",
         "VoidRogues.Network",
-        "VoidRogues.Projectiles"
+        "VoidRogues.Projectiles",
+        "VoidRogues.Core",
+        "VoidRogues.Shared",
+        "VoidRogues.Items"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

@@ -6,7 +6,8 @@
         "Unity.TextMeshPro",
         "VoidRogues.GameFlow",
         "VoidRogues.Enemies",
-        "VoidRogues.Player"
+        "VoidRogues.Player",
+        "VoidRogues.Core"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

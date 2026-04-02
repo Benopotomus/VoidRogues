@@ -1,7 +1,7 @@
 using UnityEngine;
-using VoidRogues.Core;
+using VoidRogues.Items;
 
-namespace VoidRogues.Items
+namespace VoidRogues.Player
 {
     /// <summary>
     /// World-space item pickup. Triggers the inventory system when the player
@@ -24,7 +24,7 @@ namespace VoidRogues.Items
             if (!other.CompareTag("Player"))
                 return;
 
-            var inventory = other.GetComponent<Player.InventorySystem>();
+            var inventory = other.GetComponent<InventorySystem>();
             if (inventory == null)
                 return;
 

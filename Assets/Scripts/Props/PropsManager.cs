@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
 using VoidRogues.Enemies;
-using VoidRogues.Player;
 
 namespace VoidRogues.Props
 {
@@ -239,10 +238,10 @@ namespace VoidRogues.Props
                 }
 
                 // Damage players.
-                var player = hit.GetComponent<PlayerController>();
-                if (player != null)
+                var damageable = hit.GetComponent<VoidRogues.Combat.IDamageable>();
+                if (damageable != null && damageable.IsAlive)
                 {
-                    player.TakeDamage(def.ExplosionDamage);
+                    damageable.ApplyDamage(def.ExplosionDamage);
                     continue;
                 }
 
