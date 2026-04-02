@@ -6,22 +6,39 @@ using UnityEngine.InputSystem;
 namespace VoidRogues.Network
 {
     /// <summary>
-    /// Polls the Unity Input System each tick and packages values into
+    /// Polls the Unity Input System each render frame and packages the values into
     /// <see cref="NetworkInputData"/> for Photon Fusion.
     ///
-    /// Attach to the same GameObject as <see cref="NetworkBootstrap"/> and
-    /// register this as an INetworkRunnerCallbacks listener (done automatically
-    /// via runner.AddCallbacks in NetworkBootstrap).
+    /// Follows the Hallowheart / LichLord <c>PlayerCharacterInput</c> pattern:
+    /// <list type="bullet">
+    ///   <item>One-frame actions (pressed this frame) are accumulated with |= in
+    ///         <see cref="Update"/> so no press is missed between Fusion ticks.</item>
+    ///   <item>Held actions use IsPressed() and are set every render frame.</item>
+    ///   <item><see cref="ResetInput"/> zeroes all one-frame fields after each tick
+    ///         so they do not bleed into the next tick.</item>
+    /// </list>
+    ///
+    /// Attach to the same GameObject as the <see cref="NetworkRunner"/> and register
+    /// via <c>runner.AddCallbacks(this)</c> (done by <see cref="NetworkBootstrap"/>
+    /// or <see cref="MissionLauncher"/>).
     /// </summary>
     public class NetworkInputProvider : MonoBehaviour, INetworkRunnerCallbacks
     {
-        // Aim position is calculated from mouse world position in Render;
-        // it is cached here so OnInput (called mid-tick) can read it.
-        private Vector2 _aimDirection;
-        private bool    _firePressed;
-        private bool    _interactPressed;
+        // ── Cached input state ───────────────────────────────────────────────
+        private Vector2 _aimWorldPos;
 
+        // Fire – accumulated one-frame / current held
+        private bool _fire;
+        private bool _fireHeld;
+
+        // Interact – accumulated one-frame / current held
+        private bool _interact;
+        private bool _interactHeld;
+
+        // ── Input actions ────────────────────────────────────────────────────
         private VoidRoguesInputActions _actions;
+
+        // ── Unity lifecycle ──────────────────────────────────────────────────
 
         private void Awake()
         {
@@ -35,41 +52,58 @@ namespace VoidRogues.Network
             _actions.Dispose();
         }
 
+        /// <summary>
+        /// Poll input every render frame, accumulating one-frame presses with |=
+        /// so that no press is lost between Fusion simulation ticks.
+        /// </summary>
         private void Update()
         {
-            // Cache aim direction from mouse position (world space).
-            // Camera.main is acceptable here since this runs once per render frame.
+            // Aim: convert mouse screen position to 2-D world position.
             if (Camera.main != null)
             {
-                var mouseWorld = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
-                _aimDirection = mouseWorld;   // absolute world pos; PlayerShooter subtracts player pos
+                _aimWorldPos = Camera.main.ScreenToWorldPoint(Mouse.current.position.ReadValue());
             }
 
-            _firePressed    = _actions.Gameplay.Fire.IsPressed();
-            _interactPressed = _actions.Gameplay.Interact.IsPressed();
+            // Fire: accumulate one-frame press; refresh held state every frame.
+            _fire     |= _actions.Gameplay.Fire.WasPressedThisFrame();
+            _fireHeld  = _actions.Gameplay.Fire.IsPressed();
+
+            // Interact: same pattern.
+            _interact     |= _actions.Gameplay.Interact.WasPressedThisFrame();
+            _interactHeld  = _actions.Gameplay.Interact.IsPressed();
         }
 
-        // ------------------------------------------------------------------
-        // INetworkRunnerCallbacks – input
-        // ------------------------------------------------------------------
+        // ── INetworkRunnerCallbacks – input ──────────────────────────────────
 
         public void OnInput(NetworkRunner runner, NetworkInput input)
         {
             var data = new NetworkInputData
             {
-                Move          = _actions.Gameplay.Move.ReadValue<Vector2>(),
-                AimWorldPos   = _aimDirection,
+                Move        = _actions.Gameplay.Move.ReadValue<Vector2>(),
+                AimWorldPos = _aimWorldPos,
+                Fire        = _fire,
+                FireHeld    = _fireHeld,
+                Interact    = _interact,
+                InteractHeld = _interactHeld,
             };
 
-            data.Buttons.Set(InputButton.Fire,     _firePressed);
-            data.Buttons.Set(InputButton.Interact, _interactPressed);
-
             input.Set(data);
+
+            // Reset one-frame inputs so they are not re-sent next tick.
+            ResetInput();
         }
 
-        // ------------------------------------------------------------------
-        // Unused INetworkRunnerCallbacks – required by interface
-        // ------------------------------------------------------------------
+        /// <summary>
+        /// Clears one-frame input fields.  Held fields are refreshed by
+        /// <see cref="Update"/> each render frame and do not need resetting here.
+        /// </summary>
+        public void ResetInput()
+        {
+            _fire     = false;
+            _interact = false;
+        }
+
+        // ── Unused INetworkRunnerCallbacks – required by interface ────────────
 
         public void OnInputMissing(NetworkRunner runner, PlayerRef player, NetworkInput input) { }
         public void OnPlayerJoined(NetworkRunner runner, PlayerRef player) { }
