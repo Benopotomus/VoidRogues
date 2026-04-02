@@ -1,0 +1,19 @@
+{
+    "name": "VoidRogues.Player",
+    "rootNamespace": "VoidRogues.Player",
+    "references": [
+        "Fusion.Runtime",
+        "Unity.InputSystem",
+        "VoidRogues.Network",
+        "VoidRogues.Projectiles"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
