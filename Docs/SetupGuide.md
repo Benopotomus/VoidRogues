@@ -37,12 +37,30 @@
 
 ### 2b  Install Photon Fusion 2
 
-1. Download the latest **Photon Fusion 2 SDK** (.unitypackage) from  
-   <https://dashboard.photonengine.com> → **Downloads → Fusion**.
-2. In Unity: **Assets → Import Package → Custom Package** and select the downloaded file.
-3. After import, open **Fusion → Fusion Hub** and enter your **App ID**.
+**Recommended: via Unity Package Manager (UPM)**
+
+Photon Fusion 2 and its Physics addon are listed in `Packages/manifest.json` with the
+Photon scoped registry (`https://package.photon.io`).  Unity resolves them automatically
+on first project open — no manual download needed.
+
+Packages added:
+| Package | Purpose |
+|---------|---------|
+| `com.exitgames.photonfusion` | Fusion 2 core runtime |
+| `com.exitgames.photonfusion.addon.physics` | `NetworkRigidbody2D`, lag-comp hitboxes |
+| `com.unity.nuget.newtonsoft-json` | JSON serialisation required by Fusion |
+| `com.parrelsync.parrelsync` | Multi-editor testing (see §9) |
+
+After packages resolve:
+1. Open **Fusion → Fusion Hub** and enter your **App ID**.
    - Create a free Fusion app at <https://dashboard.photonengine.com> if you do not have one.
-4. Confirm `Assets/Photon/Fusion/` exists and contains `Fusion.Runtime.dll`.
+2. Confirm the `Fusion` assembly is available in the Project window.
+
+> **Note:** If the registry is unreachable or you need a specific build, you can still
+> install via the legacy `.unitypackage` from the Photon dashboard
+> (**Assets → Import Package → Custom Package**).  In that case the files land in
+> `Assets/Photon/Fusion/` and you should remove the UPM entries from `manifest.json`
+> to avoid conflicts.
 
 ### 2c  Verify Physics 2D Settings
 
@@ -198,8 +216,8 @@ Add scenes in this order:
 
 ## 10  Recommended Third-Party Tools
 
-| Tool | Purpose |
-|------|---------|
-| **ParrelSync** | Run multiple Unity Editor instances for local multiplayer testing |
-| **LeanTween** or **DOTween** | UI animations on the Ship screen |
-| **Odin Inspector** *(optional)* | Better Editor tooling for manager configs |
+| Tool | Purpose | Status |
+|------|---------|--------|
+| **ParrelSync** | Run multiple Unity Editor instances for local multiplayer testing | ✅ Pre-configured in `manifest.json` |
+| **LeanTween** or **DOTween** | UI animations on the Ship screen | Install manually |
+| **Odin Inspector** *(optional)* | Better Editor tooling for manager configs | Install manually |

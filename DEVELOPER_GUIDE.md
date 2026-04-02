@@ -324,13 +324,17 @@ Build output goes to `Builds/` (gitignored). CI runs on every push to `develop` 
 
 | Package | Purpose | Version |
 |---------|---------|---------|
+| Photon Fusion 2 | Multiplayer networking (Host/Client) | 2.0.6 |
+| Photon Fusion Physics Addon | `NetworkRigidbody2D`, lag-comp hitboxes | 2.0.6 |
+| Newtonsoft JSON | JSON serialisation (required by Fusion) | 3.2.1 |
+| ParrelSync | Multi-editor local multiplayer testing | latest (git) |
 | Input System | Player input | 1.7.x |
 | Universal RP (URP) | 2D rendering | 14.x |
 | 2D Tilemap Extras | Extended tilemap tools | 3.x |
 | TextMeshPro | UI text rendering | 3.x (included) |
 | Cinemachine | Camera management | 2.9.x |
 
-Install via **Window → Package Manager** in Unity. Do not add packages by manually editing `Packages/manifest.json` unless absolutely necessary.
+All packages are declared in `Packages/manifest.json` and resolved automatically by Unity on first open. The Photon packages use the scoped registry at `https://package.photon.io`; a Photon App ID (free tier available at <https://dashboard.photonengine.com>) is required at runtime.
 
 ---
 
