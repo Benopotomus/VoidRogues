@@ -1,144 +1,128 @@
-using Fusion;
 using UnityEngine;
-using VoidRogues.Network;
-using VoidRogues.Projectiles;
+using VoidRogues.Core;
 
 namespace VoidRogues.Player
 {
     /// <summary>
-    /// Top-down 2D character controller driven by Fusion <see cref="NetworkInputData"/>.
-    ///
-    /// Movement:
-    ///   - Keyboard WASD (or left stick) drives <see cref="Rigidbody2D.MovePosition"/>.
-    ///   - Uses Kinematic Rigidbody2D so Fusion can reconcile positions across clients.
-    ///
-    /// Requires:
-    ///   - <see cref="NetworkRigidbody2D"/> on the same GameObject.
-    ///   - <see cref="CapsuleCollider2D"/> (horizontal, at feet) on the same GameObject.
+    /// Handles player movement, dodge-roll, and animation state transitions.
+    /// Reads input from <see cref="PlayerInputReader"/> and applies movement
+    /// via Rigidbody2D in FixedUpdate.
     /// </summary>
-    [RequireComponent(typeof(NetworkRigidbody2D))]
-    public class PlayerController : NetworkBehaviour
+    [RequireComponent(typeof(Rigidbody2D))]
+    [RequireComponent(typeof(PlayerInputReader))]
+    public class PlayerController : MonoBehaviour
     {
         [Header("Movement")]
-        [SerializeField] private float _moveSpeed = 5f;
+        [SerializeField] private float moveSpeed = 5f;
 
-        [Header("Visual")]
-        [SerializeField] private SpriteRenderer _spriteRenderer;
-        [SerializeField] private Transform      _gunPivot;
+        [Header("Dodge Roll")]
+        [SerializeField] private float dodgeForce       = 18f;
+        [SerializeField] private float dodgeDuration    = 0.2f;
+        [SerializeField] private float dodgeCooldown    = 0.6f;
+        [SerializeField] private float invincibilityTime = 0.4f;
 
-        // Cached components
-        private NetworkRigidbody2D _networkRb;
-        private Rigidbody2D        _rb;
-        private PlayerShooter      _shooter;
+        private Rigidbody2D _rb;
+        private PlayerInputReader _input;
+        private HealthSystem _health;
+        private Animator _animator;
 
-        // Networked state
-        [Networked] private PlayerNetworkData State { get; set; }
+        private Vector2 _moveDir;
+        private Vector2 _lastMoveDir = Vector2.down;
 
-        private ChangeDetector _changes;
+        private bool _isDodging;
+        private float _dodgeTimer;
+        private float _dodgeCooldownTimer;
 
-        // ------------------------------------------------------------------
-        // Lifecycle
-        // ------------------------------------------------------------------
+        private static readonly int AnimMoveX    = Animator.StringToHash("MoveX");
+        private static readonly int AnimMoveY    = Animator.StringToHash("MoveY");
+        private static readonly int AnimMoving   = Animator.StringToHash("IsMoving");
+        private static readonly int AnimDodging  = Animator.StringToHash("IsDodging");
 
-        public override void Spawned()
+        private void Awake()
         {
-            _networkRb = GetComponent<NetworkRigidbody2D>();
-            _rb        = GetComponent<Rigidbody2D>();
-            _shooter   = GetComponent<PlayerShooter>();
-            _changes   = GetChangeDetector(ChangeDetector.Source.SimulationState);
+            _rb     = GetComponent<Rigidbody2D>();
+            _input  = GetComponent<PlayerInputReader>();
+            _health = GetComponent<HealthSystem>();
+            _animator = GetComponent<Animator>();
 
-            // Initialise networked state on the host.
-            if (Object.HasStateAuthority)
+            // Register this as the cached player transform so enemies can find it cheaply.
+            if (GameManager.Instance != null)
+                GameManager.Instance.PlayerTransform = transform;
+        }
+
+        private void OnEnable()
+        {
+            _input.OnDodge += TryDodge;
+        }
+
+        private void OnDisable()
+        {
+            _input.OnDodge -= TryDodge;
+        }
+
+        private void Update()
+        {
+            _moveDir = _input.MoveInput;
+            if (_moveDir.sqrMagnitude > 0.01f)
+                _lastMoveDir = _moveDir.normalized;
+
+            UpdateDodgeTimers();
+            UpdateAnimator();
+        }
+
+        private void FixedUpdate()
+        {
+            if (_isDodging)
+                return;
+
+            float speed = GameManager.Instance != null
+                ? GameManager.Instance.Run.MoveSpeed
+                : moveSpeed;
+
+            _rb.linearVelocity = _moveDir * speed;
+        }
+
+        // ── Dodge roll ────────────────────────────────────────────────────────
+
+        private void TryDodge()
+        {
+            if (_isDodging || _dodgeCooldownTimer > 0f)
+                return;
+
+            _isDodging        = true;
+            _dodgeTimer       = dodgeDuration;
+            _dodgeCooldownTimer = dodgeCooldown;
+
+            _rb.linearVelocity = _lastMoveDir * dodgeForce;
+
+            if (_health != null)
+                _health.SetInvincible(invincibilityTime);
+        }
+
+        private void UpdateDodgeTimers()
+        {
+            if (_dodgeCooldownTimer > 0f)
+                _dodgeCooldownTimer -= Time.deltaTime;
+
+            if (_isDodging)
             {
-                State = new PlayerNetworkData { Health = 100, IsAlive = true };
+                _dodgeTimer -= Time.deltaTime;
+                if (_dodgeTimer <= 0f)
+                    _isDodging = false;
             }
         }
 
-        // ------------------------------------------------------------------
-        // Simulation
-        // ------------------------------------------------------------------
+        // ── Animator ──────────────────────────────────────────────────────────
 
-        public override void FixedUpdateNetwork()
+        private void UpdateAnimator()
         {
-            if (!State.IsAlive) return;
+            if (_animator == null)
+                return;
 
-            if (Runner.TryGetInputForPlayer<NetworkInputData>(Object.InputAuthority, out var input))
-            {
-                ApplyMovement(input.Move);
-                UpdateAimAngle(input.AimWorldPos);
-            }
+            _animator.SetFloat(AnimMoveX, _lastMoveDir.x);
+            _animator.SetFloat(AnimMoveY, _lastMoveDir.y);
+            _animator.SetBool(AnimMoving,  _moveDir.sqrMagnitude > 0.01f);
+            _animator.SetBool(AnimDodging, _isDodging);
         }
-
-        private void ApplyMovement(Vector2 moveDir)
-        {
-            var desiredVelocity = moveDir.normalized * _moveSpeed;
-            _rb.MovePosition(_rb.position + desiredVelocity * Runner.DeltaTime);
-
-            // Flip sprite to face movement direction.
-            if (moveDir.x != 0 && _spriteRenderer != null)
-            {
-                _spriteRenderer.flipX = moveDir.x < 0;
-            }
-        }
-
-        private void UpdateAimAngle(Vector2 aimWorldPos)
-        {
-            // Derive direction from player position to mouse world pos.
-            var dir = (Vector3)aimWorldPos - transform.position;
-
-            if (dir.sqrMagnitude > 0.01f)
-            {
-                float angle = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
-                var s = State;
-                s.AimAngle = angle;
-                State = s;
-            }
-        }
-
-        // ------------------------------------------------------------------
-        // Presentation
-        // ------------------------------------------------------------------
-
-        public override void Render()
-        {
-            // Rotate gun pivot to face the authoritative aim angle.
-            if (_gunPivot != null)
-            {
-                _gunPivot.rotation = Quaternion.Euler(0, 0, State.AimAngle);
-            }
-        }
-
-        // ------------------------------------------------------------------
-        // Damage (called by EnemyManager / PropsManager on the host)
-        // ------------------------------------------------------------------
-
-        public void TakeDamage(int amount)
-        {
-            if (!Object.HasStateAuthority || !State.IsAlive) return;
-
-            var s = State;
-            s.Health = (short)Mathf.Max(0, s.Health - amount);
-            s.IsAlive = s.Health > 0;
-            State = s;
-
-            if (!State.IsAlive)
-            {
-                OnDeath();
-            }
-        }
-
-        private void OnDeath()
-        {
-            // TODO: trigger death animation, respawn logic.
-            Debug.Log($"[PlayerController] Player {Object.InputAuthority} died.");
-        }
-
-        // ------------------------------------------------------------------
-        // Public accessors
-        // ------------------------------------------------------------------
-
-        public bool    IsAlive   => State.IsAlive;
-        public int     Health    => State.Health;
-        public float   AimAngle  => State.AimAngle;
     }
 }

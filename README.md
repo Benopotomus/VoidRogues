@@ -1,52 +1,72 @@
 # VoidRogues
-Roguelike 2D twin-stick shooter with online co-op powered by Photon Fusion 2.
 
-## Quick Links
-
-| Document | Description |
-|----------|-------------|
-| [Docs/SetupGuide.md](Docs/SetupGuide.md) | Unity + Photon Fusion 2 installation and project setup |
-| [Docs/Architecture.md](Docs/Architecture.md) | System architecture, folder layout, networking topology |
-| [Docs/NetworkingGuide.md](Docs/NetworkingGuide.md) | Photon Fusion 2 patterns used in this project |
-| [Docs/GameplaySystems.md](Docs/GameplaySystems.md) | Gameplay systems: player, enemies, props, projectiles, game flow |
+A fast-paced **2D action roguelike** set in the collapsing remnants of a dead universe. Players battle through procedurally generated void-dungeons, collecting cursed relics and corrupted power to survive increasingly hostile encounters — until the Void consumes them, or they consume it.
 
 ## Tech Stack
+| Area | Choice |
+|------|--------|
+| Engine | Unity 2022 LTS (2D URP) |
+| Language | C# (.NET Standard 2.1) |
+| IDE | JetBrains Rider / VS Code |
+| Version Control | Git + GitHub |
+| Art | Aseprite (pixel art, 16×16 tile grid) |
+| Audio | FMOD (integration via FMOD Unity plugin) |
 
-| Layer | Technology |
-|-------|-----------|
-| Engine | Unity 2022.3.62f1 (LTS) |
-| Networking | Photon Fusion 2 – Host/Client |
-| Physics | Unity Physics 2D (tick-synced via Fusion) |
-| Input | Unity Input System 1.7+ |
-| UI | TextMeshPro |
-| Camera | Cinemachine |
+## Quick Start
 
-## Key Design Decisions
+1. Install [Unity Hub](https://unity.com/download) and **Unity 2022.3 LTS**
+2. Clone this repo: `git clone https://github.com/Benopotomus/VoidRogues.git`
+3. Open the project folder in Unity Hub → *Add project from disk*
+4. Open `Assets/Scenes/MainMenu.unity`
+5. Press **Play** ▶
 
-- **Struct-based networking** – Hundreds of enemies and props are tracked in
-  `NetworkArray<EnemyState>` / `NetworkArray<PropState>` inside single
-  `NetworkBehaviour` managers, avoiding per-entity `NetworkObject` overhead.
-- **Top-down 2D with horizontal capsule colliders** at character feet for
-  accurate ground/bump detection.
-- **Twin-stick controls** – keyboard moves, mouse aims and fires.
-- **Host/Client topology** – the host runs all AI, damage, and physics; clients
-  receive state deltas and drive visual-only GameObjects.
-
-## Game Flow
+## Project Layout
 
 ```
-Bootstrap (scene 0) → Ship hub (scene 1) → Mission (scene 2) → Ship hub
+Assets/
+├── Animations/        # Animator controllers and clips
+├── Audio/
+│   ├── Music/
+│   └── SFX/
+├── Materials/         # URP materials and shaders
+├── Prefabs/
+│   ├── Enemies/
+│   ├── Items/
+│   ├── Player/
+│   └── Rooms/
+├── Resources/         # Runtime-loaded assets (ItemDatabase, etc.)
+├── Scenes/
+│   ├── MainMenu.unity
+│   ├── Game.unity
+│   └── GameOver.unity
+├── Scripts/
+│   ├── Combat/
+│   ├── Core/
+│   ├── Dungeon/
+│   ├── Enemies/
+│   ├── Items/
+│   ├── Player/
+│   └── UI/
+└── Sprites/
+    ├── Enemies/
+    ├── Player/
+    ├── Tiles/
+    └── UI/
 ```
 
-The **Ship** is a persistent hub where players customise characters and ready up
-for a mission.  Missions are swarms of enemies; completing all waves returns
-players to the Ship with loot.
+## Documentation
 
-## Getting Started
+| Document | Audience |
+|----------|----------|
+| [GAME_DESIGN.md](GAME_DESIGN.md) | Game designers, artists, writers |
+| [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md) | Programmers, technical contributors |
 
-See **[Docs/SetupGuide.md](Docs/SetupGuide.md)** for full setup instructions.
+## Contributing
 
-TL;DR:
-1. Open the project in Unity 2022.3.62f1.
-2. Import the Photon Fusion 2 SDK and enter your App ID.
-3. Open the `Bootstrap` scene and press Play.
+1. Fork and create a feature branch: `git checkout -b feat/your-feature`
+2. Follow the coding conventions in [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md)
+3. Open a pull request — include a short description and any relevant screenshots
+
+## License
+
+All source code is MIT licensed. Art and audio assets are proprietary — do not redistribute.
