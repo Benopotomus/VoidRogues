@@ -2,6 +2,7 @@ using Fusion;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using VoidRogues.Enemies;
 using VoidRogues.GameFlow;
 
 namespace VoidRogues.UI
