@@ -1,7 +1,7 @@
 ﻿using Fusion;
 using Fusion.Sockets;
 
-namespace LichLord
+namespace VoidRogues
 {
     using System;
     using System.Collections.Generic;

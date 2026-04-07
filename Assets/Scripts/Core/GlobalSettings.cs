@@ -2,10 +2,10 @@
 using System;
 using Fusion;
 
-namespace LichLord
+namespace VoidRogues
 {
     [Serializable]
-    [CreateAssetMenu(fileName = "GlobalSettings", menuName = "LichLord/Settings/Global Settings")]
+    [CreateAssetMenu(fileName = "GlobalSettings", menuName = "VoidRogues/Settings/Global Settings")]
     public class GlobalSettings : ScriptableObject
     {
         public NetworkRunner RunnerPrefab;

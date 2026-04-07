@@ -1,4 +1,4 @@
-﻿namespace LichLord
+﻿namespace VoidRogues
 {
     public class SceneService : CoreBehaviour
     {

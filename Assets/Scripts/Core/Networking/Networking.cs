@@ -11,7 +11,7 @@ using Fusion.Sockets;
 using UnityScene = UnityEngine.SceneManagement.Scene;
 using UnityEngine.EventSystems;
 
-namespace LichLord
+namespace VoidRogues
 {
     public class Networking : MonoBehaviour
     {

@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace LichLord
+namespace VoidRogues
 {
     public sealed class ObjectCache : SceneService
     {

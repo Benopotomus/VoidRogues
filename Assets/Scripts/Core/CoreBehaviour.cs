@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
 
-namespace LichLord
+namespace VoidRogues
 {
     public abstract class CoreBehaviour : MonoBehaviour
     {

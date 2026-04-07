@@ -8,7 +8,7 @@ using Fusion;
 using Fusion.Sockets;
 using UnityEditor;
 
-namespace LichLord
+namespace VoidRogues
 {
 
     public sealed class NetworkGame : ContextBehaviour

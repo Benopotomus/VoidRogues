@@ -1,6 +1,6 @@
 ﻿using Fusion;
 
-namespace LichLord
+namespace VoidRogues
 {
     public interface IContextBehaviour
     {
