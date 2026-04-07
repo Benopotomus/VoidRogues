@@ -4,15 +4,18 @@ namespace Fusion {
   using UnityEngine;
 
   [StructLayout(LayoutKind.Explicit)]
-  [NetworkStructWeaved(WORDS)]
+  [NetworkStructWeaved(WORDS + 4)]
   public unsafe struct NetworkCCData : INetworkStruct {
-    public const int WORDS = 4;
+    public const int WORDS = NetworkTRSPData.WORDS + 4;
     public const int SIZE  = WORDS * 4;
 
-    [FieldOffset(0 * Allocator.REPLICATE_WORD_SIZE)]
+    [FieldOffset(0)]
+    public NetworkTRSPData TRSPData;
+
+    [FieldOffset((NetworkTRSPData.WORDS + 0) * Allocator.REPLICATE_WORD_SIZE)]
     int _grounded;
 
-    [FieldOffset(1 * Allocator.REPLICATE_WORD_SIZE)]
+    [FieldOffset((NetworkTRSPData.WORDS + 1) * Allocator.REPLICATE_WORD_SIZE)]
     Vector3Compressed _velocityData;
 
     public bool Grounded {
@@ -30,10 +33,10 @@ namespace Fusion {
 
   [DisallowMultipleComponent]
   [RequireComponent(typeof(CharacterController))]
-  [NetworkBehaviourWeaved(NetworkTRSPData.WORDS + NetworkCCData.WORDS)]
+  [NetworkBehaviourWeaved(NetworkCCData.WORDS)]
   // ReSharper disable once CheckNamespace
   public sealed unsafe class NetworkCharacterController : NetworkTRSP, INetworkTRSPTeleport, IBeforeAllTicks, IAfterAllTicks, IBeforeCopyPreviousState {
-    ref NetworkCCData CCData => ref ReinterpretState<NetworkCCData>(NetworkTRSPData.WORDS);
+    new ref NetworkCCData Data => ref ReinterpretState<NetworkCCData>();
 
     [Header("Character Controller Settings")]
     public float gravity = -20.0f;
@@ -47,13 +50,13 @@ namespace Fusion {
     CharacterController _controller;
 
     public Vector3 Velocity {
-      get => CCData.Velocity;
-      set => CCData.Velocity = value;
+      get => Data.Velocity;
+      set => Data.Velocity = value;
     }
 
     public bool Grounded {
-      get => CCData.Grounded;
-      set => CCData.Grounded = value;
+      get => Data.Grounded;
+      set => Data.Grounded = value;
     }
 
     public void Teleport(Vector3? position = null, Quaternion? rotation = null) {
@@ -64,21 +67,21 @@ namespace Fusion {
 
 
     public void Jump(bool ignoreGrounded = false, float? overrideImpulse = null) {
-      if (CCData.Grounded || ignoreGrounded) {
-        var newVel = CCData.Velocity;
+      if (Data.Grounded || ignoreGrounded) {
+        var newVel = Data.Velocity;
         newVel.y      += overrideImpulse ?? jumpImpulse;
-        CCData.Velocity =  newVel;
+        Data.Velocity =  newVel;
       }
     }
 
     public void Move(Vector3 direction) {
       var deltaTime    = Runner.DeltaTime;
       var previousPos  = transform.position;
-      var moveVelocity = CCData.Velocity;
+      var moveVelocity = Data.Velocity;
 
       direction = direction.normalized;
 
-      if (CCData.Grounded && moveVelocity.y < 0) {
+      if (Data.Grounded && moveVelocity.y < 0) {
         moveVelocity.y = 0f;
       }
 
@@ -100,8 +103,8 @@ namespace Fusion {
 
       _controller.Move(moveVelocity * deltaTime);
 
-      CCData.Velocity = (transform.position - previousPos) * Runner.TickRate;
-      CCData.Grounded = _controller.isGrounded;
+      Data.Velocity = (transform.position - previousPos) * Runner.TickRate;
+      Data.Grounded = _controller.isGrounded;
     }
     
     public override void Spawned() {
@@ -135,18 +138,16 @@ namespace Fusion {
     }
 
     void CopyToBuffer() {
-      ref var state = ref State;
-      state.Position = transform.position;
-      state.Rotation = transform.rotation;
+      Data.TRSPData.Position = transform.position;
+      Data.TRSPData.Rotation = transform.rotation;
     }
 
     void CopyToEngine() {
       // CC must be disabled before resetting the transform state
       _controller.enabled = false;
-      
+
       // set position and rotation
-      ref var state = ref State;
-      transform.SetPositionAndRotation(state.Position, state.Rotation);
+      transform.SetPositionAndRotation(Data.TRSPData.Position, Data.TRSPData.Rotation);
 
       // Re-enable CC
       _controller.enabled = true;
