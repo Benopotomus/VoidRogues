@@ -3,15 +3,15 @@
 /// Holds scene specific references and common runtime data.
 /// </summary>
 /// 
-namespace LichLord
+namespace VoidRogues
 {
     using Fusion;
-    using LichLord.Missions;
-    using LichLord.NonPlayerCharacters;
-    using LichLord.Projectiles;
-    using LichLord.Props;
-    using LichLord.UI;
-    using LichLord.World;
+    using VoidRogues.Missions;
+    using VoidRogues.NonPlayerCharacters;
+    using VoidRogues.Projectiles;
+    using VoidRogues.Props;
+    using VoidRogues.UI;
+    using VoidRogues.World;
     using UnityEngine;
 
     [System.Serializable]

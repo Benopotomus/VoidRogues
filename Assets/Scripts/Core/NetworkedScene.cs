@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 
-namespace LichLord
+namespace VoidRogues
 { 
     public class NetworkedScene : CoreBehaviour
     {

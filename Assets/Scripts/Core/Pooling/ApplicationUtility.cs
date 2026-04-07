@@ -1,4 +1,4 @@
-﻿namespace LichLord
+﻿namespace VoidRogues
 {
     using System;
     using System.IO;

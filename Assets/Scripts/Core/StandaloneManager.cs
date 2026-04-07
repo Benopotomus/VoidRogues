@@ -73,7 +73,7 @@ namespace VoidRogues
                 ScenePath = scenePath,
                 LevelSeed = configuration.LevelSeed,
                 MaxPlayers = configuration.MaxPlayers,
-                CustomLobby = configuration.CustomLobby.HasValue() ? configuration.CustomLobby : "LichLord." + Application.version,
+                CustomLobby = configuration.CustomLobby.HasValue() ? configuration.CustomLobby : "VoidRogues." + Application.version,
                 IPAddress = configuration.IPAddress,
                 Port = configuration.Port,
             };

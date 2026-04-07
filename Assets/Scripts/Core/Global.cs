@@ -4,7 +4,7 @@ using UnityEngine;
 using DWD.Utility.Loading;
 using Fusion;
 
-namespace LichLord
+namespace VoidRogues
 {
     /// <summary>
     /// Manages global resources and initialization, persisting across all scenes.

@@ -1,15 +1,15 @@
-﻿using LichLord.Projectiles;
-using LichLord.Buildables;
-using LichLord.Props;
-using LichLord.NonPlayerCharacters;
+﻿using VoidRogues.Projectiles;
+using VoidRogues.Buildables;
+using VoidRogues.Props;
+using VoidRogues.NonPlayerCharacters;
 using System;
 using UnityEngine;
-using LichLord.Dialog;
+using VoidRogues.Dialog;
 
-namespace LichLord
+namespace VoidRogues
 {
     [Serializable]
-    [CreateAssetMenu(fileName = "GlobalTables", menuName = "LichLord/Tables/GlobalTables")]
+    [CreateAssetMenu(fileName = "GlobalTables", menuName = "VoidRogues/Tables/GlobalTables")]
     public class GlobalTables : ScriptableObject
     {
         /*

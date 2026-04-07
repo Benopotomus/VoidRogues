@@ -2,7 +2,7 @@
 using UnityEngine;
 using Fusion;
 
-namespace LichLord
+namespace VoidRogues
 {
     public class NetworkObjectPool : INetworkObjectProvider
     {
