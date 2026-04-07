@@ -37,30 +37,20 @@
 
 ### 2b  Install Photon Fusion 2
 
-**Recommended: via Unity Package Manager (UPM)**
+**Install via `.unitypackage` from the Photon dashboard**
 
-Photon Fusion 2 and its Physics addon are listed in `Packages/manifest.json` with the
-Photon scoped registry (`https://package.photon.io`).  Unity resolves them automatically
-on first project open — no manual download needed.
+1. Log in at <https://dashboard.photonengine.com> and create a free Fusion app if you
+   do not have one.
+2. Download the **Photon Fusion 2 SDK** `.unitypackage` from the dashboard.
+3. In Unity, go to **Assets → Import Package → Custom Package** and select the
+   downloaded `.unitypackage`.  The files will be placed in `Assets/Photon/Fusion/`.
+4. Also download and import the **Fusion Physics Addon** `.unitypackage` to get
+   `NetworkRigidbody2D` and lag-compensated hitboxes.
+5. Open **Fusion → Fusion Hub** and enter your **App ID**.
+6. Confirm the `Fusion` assembly is available in the Project window.
 
-Packages added:
-| Package | Purpose |
-|---------|---------|
-| `com.exitgames.photonfusion` | Fusion 2 core runtime |
-| `com.exitgames.photonfusion.addon.physics` | `NetworkRigidbody2D`, lag-comp hitboxes |
-| `com.unity.nuget.newtonsoft-json` | JSON serialisation required by Fusion |
-| `com.parrelsync.parrelsync` | Multi-editor testing (see §9) |
-
-After packages resolve:
-1. Open **Fusion → Fusion Hub** and enter your **App ID**.
-   - Create a free Fusion app at <https://dashboard.photonengine.com> if you do not have one.
-2. Confirm the `Fusion` assembly is available in the Project window.
-
-> **Note:** If the registry is unreachable or you need a specific build, you can still
-> install via the legacy `.unitypackage` from the Photon dashboard
-> (**Assets → Import Package → Custom Package**).  In that case the files land in
-> `Assets/Photon/Fusion/` and you should remove the UPM entries from `manifest.json`
-> to avoid conflicts.
+> **Note:** `com.unity.nuget.newtonsoft-json` is already included in
+> `Packages/manifest.json` as it is required by Fusion.
 
 ### 2c  Verify Physics 2D Settings
 

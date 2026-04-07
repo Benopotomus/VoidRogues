@@ -26,16 +26,7 @@ MonoBehaviour:
     m_IsDefault: 1
     m_Capabilities: 7
     m_ConfigSource: 0
-  - m_Id: scoped:project:Photon Engine
-    m_Name: Photon Engine
-    m_Url: https://package.photon.io
-    m_Scopes:
-    - com.photon
-    - com.exitgames
-    m_IsDefault: 0
-    m_Capabilities: 0
-    m_ConfigSource: 4
-  m_UserSelectedRegistryName: Photon Engine
+  m_UserSelectedRegistryName: 
   m_UserAddingNewScopedRegistry: 0
   m_RegistryInfoDraft:
     m_Modified: 0
