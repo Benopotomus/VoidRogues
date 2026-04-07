@@ -2,7 +2,7 @@
     "name": "VoidRogues.Player",
     "rootNamespace": "VoidRogues.Player",
     "references": [
-        "Fusion.Runtime",
+        "Fusion.Unity",
         "Unity.InputSystem",
         "VoidRogues.Network",
         "VoidRogues.Projectiles",

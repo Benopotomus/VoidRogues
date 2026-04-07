@@ -2,7 +2,7 @@
     "name": "VoidRogues.UI",
     "rootNamespace": "VoidRogues.UI",
     "references": [
-        "Fusion.Runtime",
+        "Fusion.Unity",
         "Unity.TextMeshPro",
         "VoidRogues.GameFlow",
         "VoidRogues.Enemies",

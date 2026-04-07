@@ -40,13 +40,7 @@ namespace VoidRogues.Player
         public override void Spawned()
         {
             _controller       = GetComponent<PlayerController>();
-            _projectileManager = Runner.GetComponent<ProjectileManager>();
-
-            if (_projectileManager == null)
-            {
-                _projectileManager = Object.Runner.SimulationUnityScene
-                    .GetComponent<ProjectileManager>();
-            }
+            _projectileManager = FindObjectOfType<ProjectileManager>();
         }
 
         // ------------------------------------------------------------------
@@ -94,7 +88,7 @@ namespace VoidRogues.Player
             }
 
             // Advance fire cooldown (ticks).
-            int ticksPerShot = Mathf.Max(1, Mathf.RoundToInt(Runner.Config.Simulation.TickRate / weapon.FireRate));
+            int ticksPerShot = Mathf.Max(1, Mathf.RoundToInt(Runner.TickRate / weapon.FireRate));
             _nextFireTick = Runner.Tick + ticksPerShot;
         }
 

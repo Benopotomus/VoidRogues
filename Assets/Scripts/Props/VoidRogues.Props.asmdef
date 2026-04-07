@@ -2,7 +2,7 @@
     "name": "VoidRogues.Props",
     "rootNamespace": "VoidRogues.Props",
     "references": [
-        "Fusion.Runtime",
+        "Fusion.Unity",
         "VoidRogues.Enemies",
         "VoidRogues.Shared"
     ],

@@ -2,7 +2,7 @@
     "name": "VoidRogues.Network",
     "rootNamespace": "VoidRogues.Network",
     "references": [
-        "Fusion.Runtime",
+        "Fusion.Unity",
         "Unity.InputSystem"
     ],
     "includePlatforms": [],
