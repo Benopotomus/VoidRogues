@@ -34,7 +34,8 @@ namespace VoidRogues.GameFlow
             Returning       = 4,
         }
 
-        [Networked(OnChanged = nameof(OnStateChanged))]
+        [Networked]
+        [OnChangedRender(nameof(OnStateChanged))]
         public GameState CurrentState { get; private set; }
 
         // ------------------------------------------------------------------
@@ -118,9 +119,9 @@ namespace VoidRogues.GameFlow
         // Change callback
         // ------------------------------------------------------------------
 
-        private static void OnStateChanged(Changed<GameManager> changed)
+        private void OnStateChanged()
         {
-            OnGameStateChanged?.Invoke(changed.Behaviour.CurrentState);
+            OnGameStateChanged?.Invoke(CurrentState);
         }
     }
 }
