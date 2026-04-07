@@ -6,18 +6,11 @@
       "scopes": [
         "com.arongranberg.astar"
       ]
-    },
-    {
-      "name": "OpenUPM",
-      "url": "https://package.openupm.com",
-      "scopes": [
-        "com.demigiant"
-      ]
     }
   ],
   "dependencies": {
     "com.arongranberg.astar": "5.4.6",
-    "com.demigiant.dotween": "1.2.765",
+    "com.demigiant.dotween": "https://github.com/O-S-K/DOTween.git#fed9a73bfed474fbb1d1f3182e1d725b1b16042f",
     "com.dicewrenchdesigns.dwdanimationcurveasset": "https://github.com/dicewrench/DWD.Toolkit.AnimationCurveAsset.git",
     "com.dicewrenchdesigns.dwddotweensequencer": "https://github.com/dicewrench/DWD.Toolkit.DoTweenSequencer.git",
     "com.dicewrenchdesigns.dwdeditor": "https://github.com/dicewrench/DWD.Toolkit.Editor.git",
