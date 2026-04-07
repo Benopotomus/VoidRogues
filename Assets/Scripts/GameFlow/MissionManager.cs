@@ -2,6 +2,7 @@ using System.Collections;
 using Fusion;
 using UnityEngine;
 using VoidRogues.Enemies;
+using VoidRogues.NPCs;
 using VoidRogues.Props;
 using VoidRogues.Projectiles;
 
@@ -20,6 +21,7 @@ namespace VoidRogues.GameFlow
         [SerializeField] private NetworkObject _enemyManagerPrefab;
         [SerializeField] private NetworkObject _propsManagerPrefab;
         [SerializeField] private NetworkObject _projectileManagerPrefab;
+        [SerializeField] private NetworkObject _npcManagerPrefab;
 
         [Header("Wave Configuration")]
         [SerializeField] private WaveDefinition[] _waves;
@@ -27,10 +29,14 @@ namespace VoidRogues.GameFlow
         [Header("Prop Spawn Config")]
         [SerializeField] private PropSpawnEntry[] _propSpawns;
 
+        [Header("NPC Spawn Config")]
+        [SerializeField] private NPCSpawnEntry[] _npcSpawns;
+
         // Runtime references
         private EnemyManager      _enemyManager;
         private PropsManager      _propsManager;
         private ProjectileManager _projectileManager;
+        private NPCManager        _npcManager;
 
         private int  _currentWave;
         private bool _missionComplete;
@@ -48,7 +54,9 @@ namespace VoidRogues.GameFlow
 
             CacheSpawnPoints();
             SpawnManagers();
+            RegisterWithSceneContext();
             SpawnInitialProps();
+            SpawnInitialNPCs();
             GameManager.Instance?.OnMissionStarted();
             StartCoroutine(RunMission());
         }
@@ -73,6 +81,25 @@ namespace VoidRogues.GameFlow
 
             var proj = Runner.Spawn(_projectileManagerPrefab, Vector3.zero, Quaternion.identity);
             _projectileManager = proj.GetComponent<ProjectileManager>();
+
+            var npc = Runner.Spawn(_npcManagerPrefab, Vector3.zero, Quaternion.identity);
+            _npcManager = npc.GetComponent<NPCManager>();
+        }
+
+        private void RegisterWithSceneContext()
+        {
+            var ctx = SceneContext.Instance;
+            if (ctx == null)
+            {
+                Debug.LogWarning("[MissionManager] No SceneContext found in scene. " +
+                                 "Add a SceneContext component to a GameObject in the Mission scene.");
+                return;
+            }
+
+            ctx.RegisterEnemyManager(_enemyManager);
+            ctx.RegisterPropsManager(_propsManager);
+            ctx.RegisterProjectileManager(_projectileManager);
+            ctx.RegisterNPCManager(_npcManager);
         }
 
         private void SpawnInitialProps()
@@ -82,6 +109,16 @@ namespace VoidRogues.GameFlow
             foreach (var entry in _propSpawns)
             {
                 _propsManager.RegisterProp(entry.TypeIndex, entry.Position);
+            }
+        }
+
+        private void SpawnInitialNPCs()
+        {
+            if (_npcManager == null || _npcSpawns == null) return;
+
+            foreach (var entry in _npcSpawns)
+            {
+                _npcManager.ActivateNPC(entry.TypeIndex, entry.Position);
             }
         }
 
@@ -171,6 +208,14 @@ namespace VoidRogues.GameFlow
     /// <summary>Initial prop placement data set in the Inspector.</summary>
     [System.Serializable]
     public class PropSpawnEntry
+    {
+        public byte    TypeIndex;
+        public Vector2 Position;
+    }
+
+    /// <summary>Initial NPC placement data set in the Inspector.</summary>
+    [System.Serializable]
+    public class NPCSpawnEntry
     {
         public byte    TypeIndex;
         public Vector2 Position;

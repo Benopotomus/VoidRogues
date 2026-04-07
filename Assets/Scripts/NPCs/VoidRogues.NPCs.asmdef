@@ -1,13 +1,10 @@
 {
-    "name": "VoidRogues.GameFlow",
-    "rootNamespace": "VoidRogues.GameFlow",
+    "name": "VoidRogues.NPCs",
+    "rootNamespace": "VoidRogues.NPCs",
     "references": [
         "Fusion.Runtime",
-        "VoidRogues.Enemies",
-        "VoidRogues.Props",
-        "VoidRogues.Projectiles",
-        "VoidRogues.NPCs",
-        "VoidRogues.Network"
+        "VoidRogues.Core",
+        "VoidRogues.Shared"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
