@@ -38,7 +38,7 @@
       "dependencies": {
         "com.dicewrenchdesigns.dwdpooling": "https://github.com/dicewrench/DWD.Toolkit.Pooling.git"
       },
-      "hash": "d186289a5b740b29946630fccc42cf1df05498d9"
+      "hash": "c56939e1913be27e7c803875822ebf6d15ba08ec"
     },
     "com.dicewrenchdesigns.dwdeditor": {
       "version": "https://github.com/dicewrench/DWD.Toolkit.Editor.git",
