@@ -24,6 +24,13 @@
       },
       "url": "https://arongranberg.com/packages/04680a33b40b6321660f0eca5e6e81575bfd9c6b14dcc"
     },
+    "com.demigiant.dotween": {
+      "version": "https://github.com/O-S-K/DOTween.git#fed9a73bfed474fbb1d1f3182e1d725b1b16042f",
+      "depth": 0,
+      "source": "git",
+      "dependencies": {},
+      "hash": "fed9a73bfed474fbb1d1f3182e1d725b1b16042f"
+    },
     "com.dicewrenchdesigns.dwdanimationcurveasset": {
       "version": "https://github.com/dicewrench/DWD.Toolkit.AnimationCurveAsset.git",
       "depth": 0,

@@ -12,6 +12,7 @@ namespace LichLord
     [CreateAssetMenu(fileName = "GlobalTables", menuName = "LichLord/Tables/GlobalTables")]
     public class GlobalTables : ScriptableObject
     {
+        /*
         public ProjectileTable ProjectileTable;
         public PropTable PropTable;
         public BuildableTable BuildableTable;
@@ -22,7 +23,6 @@ namespace LichLord
         public DialogTable DialogTable;
         public ItemTable ItemTable;
 
-        /*
         public ItemTable ItemTable;
         public MarkupPropTable MarkupPropTable;
         public HeroTable HeroTable;
