@@ -2,7 +2,9 @@
     "name": "VoidRogues.Enemies",
     "rootNamespace": "VoidRogues.Enemies",
     "references": [
-        "Fusion.Runtime"
+        "Fusion.Runtime",
+        "VoidRogues.Core",
+        "VoidRogues.Shared"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
