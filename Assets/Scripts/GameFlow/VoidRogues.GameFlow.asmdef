@@ -5,7 +5,8 @@
         "Fusion.Runtime",
         "VoidRogues.Enemies",
         "VoidRogues.Props",
-        "VoidRogues.Projectiles"
+        "VoidRogues.Projectiles",
+        "VoidRogues.Network"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
