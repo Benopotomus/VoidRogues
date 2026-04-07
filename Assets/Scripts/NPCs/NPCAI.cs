@@ -123,7 +123,8 @@ namespace VoidRogues.NPCs
 
             if (needNewTarget || distToTarget < 0.15f)
             {
-                // Generate a deterministic-ish random offset from the spawn origin.
+                // Use prime-number multipliers for deterministic pseudo-random angle and
+                // radius distribution based on the current tick and NPC type.
                 float angle  = ((currentTick * 7919 + state.TypeIndex * 104729) % 36000) / 100f * Mathf.Deg2Rad;
                 float radius = def.WanderRadius * (((currentTick * 6271 + state.TypeIndex * 48611) % 1000) / 1000f);
 
