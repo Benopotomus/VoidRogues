@@ -334,7 +334,7 @@ Build output goes to `Builds/` (gitignored). CI runs on every push to `develop` 
 | TextMeshPro | UI text rendering | 3.x (included) |
 | Cinemachine | Camera management | 2.9.x |
 
-All packages are declared in `Packages/manifest.json` and resolved automatically by Unity on first open. The Photon packages use the scoped registry at `https://package.photon.io`; a Photon App ID (free tier available at <https://dashboard.photonengine.com>) is required at runtime.
+All non-Photon packages are declared in `Packages/manifest.json` and resolved automatically by Unity on first open. Photon Fusion 2 and its Physics Addon must be installed manually via `.unitypackage` from the [Photon dashboard](https://dashboard.photonengine.com) — see [Docs/SetupGuide.md](Docs/SetupGuide.md) §2b for instructions. A Photon App ID (free tier available) is required at runtime.
 
 ---
 
