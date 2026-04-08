@@ -41,6 +41,12 @@ namespace VoidRogues
         public PlayerRef LocalPlayerRef;
         [HideInInspector]
         public PlayerCharacter LocalPlayerCharacter;
+        [HideInInspector]
+        public PlayerRef ObservedPlayerRef;
+        [HideInInspector]
+        public PlayerCharacter ObservedPlayerCharacter;
+        [HideInInspector]
+        public GameplayMode GameplayMode;
 
         // General
         /*
@@ -68,16 +74,12 @@ namespace VoidRogues
 
         [HideInInspector]
         public PlayerRef LocalPlayerRef;
-        [HideInInspector]
-        public PlayerRef ObservedPlayerRef;
-        [HideInInspector]
-        public HeroEntity ObservedHeroEntity;
+
         [HideInInspector]
         public GlobalSettings Settings;
         [HideInInspector]
         public RuntimeSettings RuntimeSettings;
-        [HideInInspector]
-        public GameplayMode GameplayMode;
+
         [HideInInspector]
         public NetworkLobby Lobby;
                 */

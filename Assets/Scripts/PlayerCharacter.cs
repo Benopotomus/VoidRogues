@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace VoidRogues
 {
-    public class PlayerCharacter : MonoBehaviour
+    public class PlayerCharacter : ContextBehaviour
     {
         // Start is called before the first frame update
         void Start()

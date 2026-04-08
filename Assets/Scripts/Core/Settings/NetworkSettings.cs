@@ -12,7 +12,7 @@ namespace VoidRogues
     }
 
     [Serializable]
-    [CreateAssetMenu(fileName = "NetworkSettings", menuName = "Hallowheart/Settings/Network Settings")]
+    [CreateAssetMenu(fileName = "NetworkSettings", menuName = "VoidRogues/Settings/Network Settings")]
     public class NetworkSettings : ScriptableObject
     {
         public RegionInfo[] Regions;

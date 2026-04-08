@@ -1,6 +1,7 @@
 ﻿using Fusion;
 using UnityEngine;
 using System.IO;
+using VoidRogues.Players;
 
 namespace VoidRogues
 {
@@ -20,29 +21,35 @@ namespace VoidRogues
             LocalPlayerCharacter = null;
         }
 
-        public void SpawnLocalPlayer(PlayerRef playerRef)
+
+        public void SpawnAllPlayerCharacters()
         {
-            if (LocalPlayerCharacter != null)
-                return;
+            var playerEntities = Runner.GetAllBehaviours<PlayerEntity>();
 
-            if (!Runner.IsPlayerValid(Runner.LocalPlayer))
+            foreach (PlayerEntity playerEntity in playerEntities)
             {
-                Debug.LogWarning("LocalPlayer is invalid, cannot spawn player!");
-                return;
+                Debug.Log("Try to spawn player");
+                TrySpawnPlayerCharacter(playerEntity);
             }
-
-
-                CreateAndSpawnPlayer(playerRef);
-
         }
 
-        private void CreateAndSpawnPlayer(PlayerRef playerRef)
+        public PlayerCharacter TrySpawnPlayerCharacter(PlayerEntity playerEntity)
         {
             (Vector3, Quaternion) spawnPosition = GetSpawnPosition();
+            var playerRef = playerEntity.Object.InputAuthority;
 
-            LocalPlayerCharacter = Runner.Spawn(_playerPrefab, spawnPosition.Item1, spawnPosition.Item2, inputAuthority: playerRef);
+            var spawnedCreature = Runner.Spawn(_playerPrefab, spawnPosition.Item1, Quaternion.identity, playerRef, (runner, obj) =>
+            {
 
-            Debug.Log($"Create local player at {spawnPosition} with Nickname {LocalPlayer.Nickname}");
+            });
+
+            Runner.SetPlayerAlwaysInterested(playerRef, spawnedCreature.Object, true);
+
+            playerEntity.Statistics.IsAlive = true;
+            playerEntity.Statistics.RespawnTimer = default;
+
+            playerEntity.ActivePlayerCharacter = spawnedCreature;
+            return spawnedCreature;
         }
 
         private string GetInstanceId()

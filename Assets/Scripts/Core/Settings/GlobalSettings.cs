@@ -12,6 +12,9 @@ namespace VoidRogues
 
         public bool SimulateMobileInput;
 
+        public GameSessionSettings GameSessions;
+        public NetworkSettings Network;
+
         [Space]
         public OptionsData DefaultOptions;
 

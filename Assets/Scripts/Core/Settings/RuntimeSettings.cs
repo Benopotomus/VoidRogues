@@ -93,14 +93,20 @@ namespace VoidRogues
 
             int currentWidth = Mathf.RoundToInt(Screen.width);
             int currentHeight = Mathf.RoundToInt(Screen.height);
-            int defaultRefreshRate = Mathf.RoundToInt((float)resolutions[^1].refreshRate);
+
+            // Get the current refresh rate as a float (this is the recommended way)
+            float currentRefreshRate = (float)Screen.currentResolution.refreshRateRatio.value;
 
             for (int i = 0; i < resolutions.Length; i++)
             {
                 var resolution = resolutions[i];
 
-                if (resolution.width == currentWidth && resolution.height == currentHeight && Mathf.RoundToInt((float)resolution.refreshRate) == defaultRefreshRate)
+                if (resolution.width == currentWidth &&
+                    resolution.height == currentHeight &&
+                    Mathf.Approximately((float)resolution.refreshRateRatio.value, currentRefreshRate))
+                {
                     return i;
+                }
             }
 
             return -1;
