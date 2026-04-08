@@ -25,9 +25,8 @@ namespace VoidRogues
             //AddService(Context.UI);
             //Context.UI.Activate();
 
-            //AddService(Context.Camera);
-            //Context.Camera.Activate();
-            //
+            AddService(Context.Camera);
+            Context.Camera.Activate();
         }
 
     }
