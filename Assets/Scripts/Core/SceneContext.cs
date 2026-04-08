@@ -6,12 +6,6 @@
 namespace VoidRogues
 {
     using Fusion;
-    using VoidRogues.Missions;
-    using VoidRogues.NonPlayerCharacters;
-    using VoidRogues.Projectiles;
-    using VoidRogues.Props;
-    using VoidRogues.UI;
-    using VoidRogues.World;
     using UnityEngine;
 
     [System.Serializable]
@@ -23,7 +17,8 @@ namespace VoidRogues
 
         public NetworkRunner Runner;
         public NetworkGame NetworkGame;
-        public SpawnManager SpawnManager;
+        public PlayerSpawnManager PlayerSpawnManager;
+        /*
         public ProjectileManager ProjectileManager;
         public PropManager PropManager;
         public WorldSaveLoadManager WorldSaveLoadManager;
@@ -40,6 +35,7 @@ namespace VoidRogues
         public MissionManager MissionManager;
         public DebugConsole DebugConsole;
         public VisualEffectManager VFXManager;
+        */
 
         [HideInInspector]
         public PlayerRef LocalPlayerRef;

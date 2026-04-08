@@ -1,10 +1,5 @@
-﻿using VoidRogues.Projectiles;
-using VoidRogues.Buildables;
-using VoidRogues.Props;
-using VoidRogues.NonPlayerCharacters;
-using System;
+﻿using System;
 using UnityEngine;
-using VoidRogues.Dialog;
 
 namespace VoidRogues
 {

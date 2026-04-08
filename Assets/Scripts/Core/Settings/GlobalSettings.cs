@@ -12,23 +12,12 @@ namespace VoidRogues
 
         public bool SimulateMobileInput;
 
-        /*
-        [Header("Settings")]
-
-        public HeroSettings Heroes;
-        public ScenesSettings Scenes;
-        public GameSessionSettings GameSessions;
-        public NetworkSettings Network;
-        */
-
         [Space]
         public OptionsData DefaultOptions;
 
         [Space]
         public StandaloneConfiguration DebugConnection;
 
-        [Space]
-        public TestLoadout TestLoadout;
 
 
     }
