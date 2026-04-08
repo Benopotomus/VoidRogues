@@ -444,7 +444,7 @@ MonoBehaviour:
     Runner: {fileID: 0}
     NetworkGame: {fileID: 1917063168}
     PlayerSpawnManager: {fileID: 1114471611}
-    Camera: {fileID: 0}
+    Camera: {fileID: 1553291050}
     LocalPlayerCharacter: {fileID: 0}
     ObservedPlayerCharacter: {fileID: 0}
     GameplayMode: {fileID: 0}
@@ -464,6 +464,7 @@ Transform:
   - {fileID: 1917063167}
   - {fileID: 139012837}
   - {fileID: 1114471612}
+  - {fileID: 1553291049}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1530729293
@@ -499,7 +500,7 @@ MonoBehaviour:
   _defaultConfiguration:
     GameSessionID: 0
     LevelSeed: 0
-    GameMode: 6
+    GameMode: 1
     ServerName: VoidRogues
     MaxPlayers: 0
     ExtraPeers: 0
@@ -512,6 +513,7 @@ MonoBehaviour:
     QueryProtocol: 0
     Matchmaking: 0
     Backfill: 0
+    GameplayType: 0
 --- !u!4 &1530729295
 Transform:
   m_ObjectHideFlags: 0
@@ -527,6 +529,70 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1553291048
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1553291049}
+  - component: {fileID: 1553291050}
+  m_Layer: 0
+  m_Name: SceneCamera
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1553291049
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1553291048}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1263847737}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1553291050
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1553291048}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a565f3ca075e1641863cd6bc67ff057, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  _skydomeTransform: {fileID: 0}
+  _cameraFollowTarget: {fileID: 0}
+  followTransform: {fileID: 0}
+  thirdPersonCam: {fileID: 0}
+  firstPersonCam: {fileID: 0}
+  _minRaycastDistance: 2.7
+  _maxRaycastDistance: 100
+  _raycastLayerMask:
+    serializedVersion: 2
+    m_Bits: 0
+  _rayOrigin: {x: 0.5, y: 0.5}
+  _cachedRaycastHit:
+    position: {x: 0, y: 0, z: 0}
+    staticPosition: {x: 0, y: 0, z: 0}
+  _fireShakeSettings: {fileID: 0}
+  _takeDamageShakeSettings: {fileID: 0}
+  _aoeShakeSettings: {fileID: 0}
+  _defaultShakeDuration: 0.35
+  _defaultShakeAmplitude: 1.8
+  _defaultShakeFrequency: 12
 --- !u!1 &1917063166
 GameObject:
   m_ObjectHideFlags: 0
