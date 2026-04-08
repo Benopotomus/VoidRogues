@@ -27,6 +27,7 @@ namespace VoidRogues
         public bool QueryProtocol;
         public bool Matchmaking;
         public bool Backfill;
+        public EGameplayModeType GameplayType;
     }
 
     public class StandaloneManager : MonoBehaviour
@@ -76,6 +77,7 @@ namespace VoidRogues
                 CustomLobby = configuration.CustomLobby.HasValue() ? configuration.CustomLobby : "VoidRogues." + Application.version,
                 IPAddress = configuration.IPAddress,
                 Port = configuration.Port,
+                GameplayType = configuration.GameplayType,
             };
 
                 while (Global.Networking == null)

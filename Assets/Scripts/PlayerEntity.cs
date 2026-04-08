@@ -126,7 +126,7 @@ namespace VoidRogues.Players
             //_playerDataSent = false;
             _initCounter = 10;
 
-            if (HasInputAuthority)
+            if (HasInputAuthority && Context != null)
             {
                 Context.LocalPlayerRef = Object.InputAuthority;
             }
@@ -157,7 +157,7 @@ namespace VoidRogues.Players
             var observedPlayer = GetPlayerEntity(Runner, _observedPlayer);
             var observedPlayerRef = observedPlayerCharacter != null ? observedPlayerCharacter.Object.InputAuthority : Object.InputAuthority;
 
-            if (HasInputAuthority)
+            if (HasInputAuthority && Context != null)
             {
                 Context.ObservedPlayerCharacter = observedPlayerCharacter;
                 Context.ObservedPlayerRef = observedPlayerRef;

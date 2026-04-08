@@ -191,30 +191,30 @@ namespace VoidRogues
             StartGameArgs startGameArgs = new StartGameArgs
             {
                 GameMode = _gameMode,
-                SessionName = _gameMode == GameMode.Shared ? _request.SessionName : null,
+                SessionName = _gameMode != GameMode.Single ? _request.SessionName : null,
                 Scene = _sceneInfo,
                 OnGameStarted = OnGameInitialized,
                 ObjectProvider = pool,
-                CustomLobbyName = _gameMode == GameMode.Shared ? _request.CustomLobby : null,
+                CustomLobbyName = _gameMode != GameMode.Single ? _request.CustomLobby : null,
                 SceneManager = _sceneManager,
-                EnableClientSessionCreation = _gameMode == GameMode.Shared
+                EnableClientSessionCreation = _gameMode == GameMode.Shared || _gameMode == GameMode.AutoHostOrClient
             };
 
-            if (_request.MaxPlayers > 0 && _gameMode == GameMode.Shared)
+            if (_request.MaxPlayers > 0 && _gameMode != GameMode.Single)
             {
                 startGameArgs.PlayerCount = _request.MaxPlayers;
             }
 
-            if (_gameMode == GameMode.Shared)
+            if (_gameMode != GameMode.Single && _gameMode != GameMode.Client)
             {
                 startGameArgs.SessionProperties = CreateSessionProperties(_request);
             }
 
-            if (!string.IsNullOrEmpty(_request.IPAddress) && _gameMode == GameMode.Shared)
+            if (!string.IsNullOrEmpty(_request.IPAddress) && _gameMode != GameMode.Single)
             {
                 startGameArgs.Address = NetAddress.CreateFromIpPort(_request.IPAddress, _request.Port);
             }
-            else if (_request.Port > 0 && _gameMode == GameMode.Shared)
+            else if (_request.Port > 0 && _gameMode != GameMode.Single)
             {
                 startGameArgs.Address = NetAddress.Any(_request.Port);
             }
@@ -346,6 +346,9 @@ namespace VoidRogues
 
             StatusDescription = "Activating network game";
 
+            Log($"NetworkGame.Initialize()");
+            networkGame.Initialize(_request.GameplayType);
+
             Log($"NetworkGame.Activate()");
             yield return networkGame.Activate(_request.LevelSequenceID, _request.LevelSeed);
 
@@ -381,7 +384,7 @@ namespace VoidRogues
                 Debug.Log($"Shutdown {_runner.name}");
                 try
                 {
-                    if (_gameMode == GameMode.Shared && _runner.SessionInfo != null)
+                    if (_gameMode != GameMode.Single && _runner.SessionInfo != null)
                     {
                         Log($"Closing the room");
                         _runner.SessionInfo.IsOpen = false;

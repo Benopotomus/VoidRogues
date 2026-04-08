@@ -9,7 +9,7 @@ namespace VoidRogues
         public string DisplayName;
         public string SessionName;
         public string ScenePath;
-        //public EGameplayType GameplayType;
+        public EGameplayModeType GameplayType;
         public int LevelSequenceID;
         //public eLevelPhase LevelPhase;
         public int GameSessionID;

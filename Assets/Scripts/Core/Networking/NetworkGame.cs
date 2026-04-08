@@ -83,6 +83,20 @@ namespace VoidRogues
         private void LoadGameplayMode(EGameplayModeType gameplayModeType)
         {
             BundleObject modeObject = GetBundleObjectForType(gameplayModeType);
+
+            // If the requested type is not found, fall back to the first available mode
+            if (modeObject == null && _gameplayModes.Length > 0)
+            {
+                Debug.LogWarning($"GameplayMode type {gameplayModeType} not found, falling back to {_gameplayModes[0].type}");
+                modeObject = _gameplayModes[0].mode;
+            }
+
+            if (modeObject == null)
+            {
+                Debug.LogError("No GameplayMode bundles configured on NetworkGame!");
+                return;
+            }
+
             if (modeObject.Ready)
             {
                 AssetBundleLoader modeLoader = AssetBundleManager.Instance.LoadBundleObject(modeObject) as AssetBundleLoader;
