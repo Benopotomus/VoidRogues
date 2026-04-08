@@ -25,21 +25,22 @@ namespace VoidRogues
         public const string MODE_KEY = "mode";
         public const string STATUS_SERVER_CLOSED = "Server Closed";
 
+        private enum ConnectionState { Idle, Connecting, Connected, Disconnecting }
+
         // PUBLIC MEMBERS
         public string Status { get; private set; }
         public string StatusDescription { get; private set; }
         public string ErrorStatus { get; private set; }
 
-        public bool HasSession => HasActiveSession || IsStartingSession;
-        public bool IsConnecting => IsStartingSession || (HasActiveSession && !IsConnected);
-        public bool IsConnected => HasActiveSession && !IsStartingSession && _runner != null && _runner.IsRunning && (_gameMode == GameMode.Single || _runner.IsConnectedToServer);
+        public bool HasSession => _state != ConnectionState.Idle;
+        public bool IsConnecting => _state == ConnectionState.Connecting;
+        public bool IsConnected => _state == ConnectionState.Connected && _runner != null && _runner.IsRunning && (_gameMode == GameMode.Single || _runner.IsConnectedToServer);
 
         public string ReturnScene;
 
         // PRIVATE MEMBERS
-        private bool HasActiveSession;
-        private bool IsStartingSession;
-        private bool _connectionRequested;
+        private ConnectionState _state = ConnectionState.Idle;
+        private bool _stopRequested;
         private NetworkSceneInfo _sceneInfo;
         private SceneContext _sceneContext;
         private GameMode _gameMode;
@@ -48,7 +49,6 @@ namespace VoidRogues
         private UnityScene _loadedScene;
         private string _userID;
         private FSessionRequest _request;
-        private bool _stopGameOnDisconnect;
         private Coroutine _coroutine;
 
         private string _cachedSessionName;
@@ -57,8 +57,14 @@ namespace VoidRogues
         // PUBLIC METHODS
         public void StartGame(FSessionRequest request)
         {
+            if (_state != ConnectionState.Idle)
+            {
+                Debug.LogWarning("Networking: Cannot start a new game while a session is active.");
+                return;
+            }
+
             _cachedSessionName = request.SessionName;
-            if (_gameMode == GameMode.Single && string.IsNullOrEmpty(_cachedSessionName))
+            if (request.GameMode == GameMode.Single && string.IsNullOrEmpty(_cachedSessionName))
             {
                 _cachedSessionName = "SinglePlayer";
             }
@@ -86,36 +92,40 @@ namespace VoidRogues
             _gameMode = request.GameMode;
             _userID = request.UserID;
             _request = request;
-            _connectionRequested = true;
-            IsStartingSession = true;
-            _stopGameOnDisconnect = false;
+            _stopRequested = false;
             ErrorStatus = null;
 
             Log($"StartGame() UserID:{request.UserID} GameMode:{request.GameMode} " +
                 $"DisplayName:{request.DisplayName} SessionName:{request.SessionName} ScenePath:{request.ScenePath} " +
                 $" MaxPlayers:{request.MaxPlayers} CustomLobby:{request.CustomLobby}");
+
+            _state = ConnectionState.Connecting;
+            Status = "Starting";
+            _coroutine = StartCoroutine(ConnectCoroutine());
         }
 
         public void StopGame(string errorStatus = null)
         {
             Log($"StopGame()");
-
-            IsStartingSession = false;
-            _connectionRequested = false;
-            _stopGameOnDisconnect = false;
-
-            if (HasActiveSession)
-            {
-                _connectionRequested = false;
-            }
-
             ErrorStatus = errorStatus;
+
+            if (_state == ConnectionState.Idle || _state == ConnectionState.Disconnecting)
+                return;
+
+            _stopRequested = true;
+
+            // If a coroutine is already running (e.g. ConnectCoroutine),
+            // it will detect _stopRequested and yield into DisconnectCoroutine itself.
+            if (_coroutine == null)
+            {
+                _coroutine = StartCoroutine(DisconnectCoroutine());
+            }
         }
 
         public void StopGameOnDisconnect()
         {
             Log($"StopGameOnDisconnect()");
-            _stopGameOnDisconnect = true;
+            _stopRequested = true;
         }
 
         public void ClearErrorStatus()
@@ -126,75 +136,29 @@ namespace VoidRogues
         // MONOBEHAVIOUR
         protected void Update()
         {
-            if (IsStartingSession)
-            {
-                if (!HasActiveSession)
-                {
-                    HasActiveSession = true;
-                    IsStartingSession = false;
-                }
-                else
-                {
-                    _connectionRequested = false;
-                }
-            }
-
-            UpdateSession();
-
-            if (_coroutine == null && HasActiveSession && !IsConnected)
-            {
-                if (!IsStartingSession)
-                {
-                    Log($"Starting LoadMenuCoroutine()");
-                    //_coroutine = StartCoroutine(LoadSceneCoroutine(Global.Settings.Scenes.BaseCampScene));
-                }
-
-                HasActiveSession = false;
-                ClearSession();
-            }
-        }
-
-        // PRIVATE METHODS
-        private void UpdateSession()
-        {
-            if (!HasActiveSession)
+            if (_state == ConnectionState.Idle)
             {
                 Status = string.Empty;
                 StatusDescription = string.Empty;
                 return;
             }
 
-            if (_coroutine != null)
-                return;
+            // Detect unexpected disconnect while connected
+            if (_state == ConnectionState.Connected && _coroutine == null)
+            {
+                bool runnerLost = _runner == null || !_runner.IsRunning;
+                bool serverLost = !runnerLost && _gameMode != GameMode.Single && !_runner.IsConnectedToServer;
 
-            if (_stopGameOnDisconnect && _connectionRequested && !IsConnected)
-            {
-                Log($"Stopping game after disconnect");
-                _stopGameOnDisconnect = false;
-                StopGame();
-                return;
-            }
-
-            if (_connectionRequested && !IsConnected)
-            {
-                Status = "Starting";
-                Log($"Starting ConnectCoroutine()");
-                _coroutine = StartCoroutine(ConnectCoroutine());
-            }
-            else if (!_connectionRequested && IsConnected)
-            {
-                Status = "Quitting";
-                Log($"Starting DisconnectCoroutine()");
-                _coroutine = StartCoroutine(DisconnectCoroutine());
-            }
-            else if (!IsConnected)
-            {
-                Status = "Connection Lost";
-                Log($"Starting DisconnectCoroutine()");
-                _coroutine = StartCoroutine(DisconnectCoroutine());
+                if (runnerLost || serverLost || _stopRequested)
+                {
+                    Status = _stopRequested ? "Quitting" : "Connection Lost";
+                    Log($"{Status} — starting DisconnectCoroutine()");
+                    _coroutine = StartCoroutine(DisconnectCoroutine());
+                }
             }
         }
 
+        // PRIVATE METHODS
         private IEnumerator ConnectCoroutine(float connectionTimeout = 20f, float loadTimeout = 45f)
         {
             StatusDescription = "Unloading current scene";
@@ -272,15 +236,13 @@ namespace VoidRogues
                     Debug.LogError($"Runner start timeout! IsCompleted: {startGameTask.IsCompleted}");
                     ErrorStatus = "Connection Timeout";
                     yield return DisconnectCoroutine();
-                    _coroutine = null;
                     yield break;
                 }
 
-                if (!_connectionRequested)
+                if (_stopRequested)
                 {
                     Log($"Stopping coroutine (requested by user)");
                     yield return DisconnectCoroutine();
-                    _coroutine = null;
                     yield break;
                 }
             }
@@ -293,22 +255,25 @@ namespace VoidRogues
                 Debug.LogError($"Runner failed to start! Result: {result}");
                 ErrorStatus = result.ShutdownReason == ShutdownReason.GameNotFound ? STATUS_SERVER_CLOSED : StringToLabel(result.ShutdownReason.ToString());
                 yield return DisconnectCoroutine();
-                _coroutine = null;
                 yield break;
             }
 
             limitTime += loadTimeout;
             StatusDescription = "Waiting for server connection";
 
-            while (!IsConnected)
+            while (!IsRunnerConnected())
             {
                 yield return null;
+                if (_stopRequested)
+                {
+                    yield return DisconnectCoroutine();
+                    yield break;
+                }
                 if (Time.realtimeSinceStartup >= limitTime)
                 {
                     Debug.LogError($"Runner connection timeout!");
                     ErrorStatus = "Connection Timeout";
                     yield return DisconnectCoroutine();
-                    _coroutine = null;
                     yield break;
                 }
             }
@@ -325,7 +290,6 @@ namespace VoidRogues
                     Debug.LogError($"Scene load timeout!");
                     ErrorStatus = "Scene Load Timeout";
                     yield return DisconnectCoroutine();
-                    _coroutine = null;
                     yield break;
                 }
             }
@@ -346,7 +310,6 @@ namespace VoidRogues
                     Debug.LogError($"GameplayScene query timeout!");
                     ErrorStatus = "Gameplay Scene Timeout";
                     yield return DisconnectCoroutine();
-                    _coroutine = null;
                     yield break;
                 }
             }
@@ -375,7 +338,6 @@ namespace VoidRogues
                     Debug.LogError($"Network game timeout!");
                     ErrorStatus = "Network Game Timeout";
                     yield return DisconnectCoroutine();
-                    _coroutine = null;
                     yield break;
                 }
             }
@@ -393,18 +355,20 @@ namespace VoidRogues
             Log($"NetworkGame.Activate()");
             yield return networkGame.Activate(_request.LevelSequenceID, _request.LevelSeed);
 
+            _state = ConnectionState.Connected;
             Debug.Log($"Session started in {(Time.realtimeSinceStartup - baseTime):0.00}s");
             _coroutine = null;
         }
 
         private IEnumerator DisconnectCoroutine()
         {
+            _state = ConnectionState.Disconnecting;
             StatusDescription = "Disconnecting from server";
 
-            UnityScene gameplayScene = HasActiveSession ? _loadedScene : default;
-            NetworkedScene scene = gameplayScene.GetComponent<NetworkedScene>(true);
+            UnityScene gameplayScene = _loadedScene;
+            NetworkedScene scene = gameplayScene.IsValid() ? gameplayScene.GetComponent<NetworkedScene>(true) : null;
 
-            if (gameplayScene.IsValid())
+            if (scene != null)
             {
                 try
                 {
@@ -418,7 +382,7 @@ namespace VoidRogues
             }
 
             Task shutdownTask = null;
-            if (HasActiveSession && _runner != null)
+            if (_runner != null)
             {
                 Debug.Log($"Shutdown {_runner.name}");
                 try
@@ -457,31 +421,9 @@ namespace VoidRogues
                 yield return null;
             }
 
-            if (HasActiveSession)
-            {
-                ClearSession();
-                HasActiveSession = false;
-            }
-
+            ClearSession();
             _coroutine = null;
             Log($"DisconnectCoroutine() finished");
-        }
-
-        private IEnumerator LoadSceneCoroutine(string sceneName)
-        {
-            if (SceneManager.sceneCount == 1 && SceneManager.GetSceneAt(0).name == sceneName)
-            {
-                _coroutine = null;
-                yield break;
-            }
-
-            StatusDescription = "Loading menu scene";
-            yield return null;
-
-            yield return SceneManager.LoadSceneAsync(sceneName, LoadSceneMode.Additive);
-
-            SceneManager.SetActiveScene(SceneManager.GetSceneByName(sceneName));
-            _coroutine = null;
         }
 
         private void OnGameInitialized(NetworkRunner runner)
@@ -512,8 +454,19 @@ namespace VoidRogues
             return dictionary;
         }
 
+        /// <summary>
+        /// Checks if the runner is connected, without relying on <see cref="_state"/>.
+        /// Used during the connect coroutine before the state transitions to Connected.
+        /// </summary>
+        private bool IsRunnerConnected()
+        {
+            return _runner != null && _runner.IsRunning && (_gameMode == GameMode.Single || _runner.IsConnectedToServer);
+        }
+
         private void ClearSession()
         {
+            _state = ConnectionState.Idle;
+            _stopRequested = false;
             _runner = null;
             _sceneManager = null;
             _loadedScene = default;
@@ -522,7 +475,6 @@ namespace VoidRogues
             _gameMode = default;
             _userID = null;
             _request = default;
-            _connectionRequested = false;
         }
 
         [System.Diagnostics.Conditional("ENABLE_LOGS")]
