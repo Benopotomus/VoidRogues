@@ -18,6 +18,7 @@ namespace VoidRogues
         public NetworkRunner Runner;
         public NetworkGame NetworkGame;
         public PlayerSpawnManager PlayerSpawnManager;
+        public SceneCamera Camera;
         /*
         public ProjectileManager ProjectileManager;
         public PropManager PropManager;
@@ -26,7 +27,6 @@ namespace VoidRogues
         public NonPlayerCharacterManager NonPlayerCharacterManager;
         public WorldManager WorldManager;
         public ChunkManager ChunkManager;
-        public SceneCamera Camera;
         public SceneUI UI;
         public LairManager LairManager;
         public InvasionManager InvasionManager;
