@@ -114,6 +114,8 @@ namespace VoidRogues
 
             _stopRequested = true;
 
+            // If a coroutine is already running (e.g. ConnectCoroutine),
+            // it will detect _stopRequested and yield into DisconnectCoroutine itself.
             if (_coroutine == null)
             {
                 _coroutine = StartCoroutine(DisconnectCoroutine());
