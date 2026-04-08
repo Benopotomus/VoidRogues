@@ -69,12 +69,6 @@ namespace VoidRogues
                 _cachedSessionName = "SinglePlayer";
             }
 
-            if (request.GameMode != GameMode.Shared && request.GameMode != GameMode.Single)
-            {
-                Debug.LogError($"Only GameMode.Shared and GameMode.Single are supported. Got: {request.GameMode}");
-                return;
-            }
-
             SceneRef sceneRef = default;
             int sceneIndex = SceneUtility.GetBuildIndexByScenePath(request.ScenePath);
             if (sceneIndex >= 0)

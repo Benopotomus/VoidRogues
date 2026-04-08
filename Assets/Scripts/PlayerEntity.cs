@@ -126,7 +126,7 @@ namespace VoidRogues.Players
             //_playerDataSent = false;
             _initCounter = 10;
 
-            if (HasInputAuthority == true)
+            if (HasInputAuthority)
             {
                 Context.LocalPlayerRef = Object.InputAuthority;
             }

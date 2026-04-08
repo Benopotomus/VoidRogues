@@ -44,7 +44,7 @@ namespace VoidRogues
         Finished,
     }
 
-    public abstract class GameplayMode : ContextBehaviour
+    public class GameplayMode : ContextBehaviour
     {
         public string GameplayName;
 
@@ -205,7 +205,9 @@ namespace VoidRogues
             Debug.Log("Level Loaded, Setting up Mode Elements");
         }
 
-        protected abstract void CheckWinCondition();
+        protected void CheckWinCondition()
+        {
+        }
 
         // PROTECTED METHODS
 

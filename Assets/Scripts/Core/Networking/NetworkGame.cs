@@ -98,11 +98,18 @@ namespace VoidRogues
         private void OnGameplayModeLoaded(ILoader loader)
         {
             AssetBundleLoader modeLoader = loader as AssetBundleLoader;
-            modeLoader.OnLoadComplete += OnGameplayModeLoaded;
+            modeLoader.OnLoadComplete -= OnGameplayModeLoaded;
 
             GameObject prefab = modeLoader.GetAsset<GameObject>();
             if (prefab == null)
                 prefab = modeLoader.GetAssetWithin<GameObject>();
+
+            if (prefab == null)
+            {
+                Debug.LogError("GameplayMode prefab failed to load from asset bundle!");
+                return;
+            }
+
             var modeInstance = Runner.Spawn(prefab);
         }
 
