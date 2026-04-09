@@ -19,7 +19,7 @@ namespace VoidRogues
         /// The transform the camera is actively following.
         /// Set explicitly by the player character on spawn via <see cref="SetCameraFollow"/>.
         /// </summary>
-        public Transform followTransform;
+        private Transform _followTransform;
 
         protected override void OnInitialize()
         {
@@ -42,7 +42,7 @@ namespace VoidRogues
         /// </summary>
         public void SetCameraFollow(Transform target)
         {
-            followTransform = target;
+            _followTransform = target;
         }
 
         protected override void OnTick()
@@ -52,10 +52,11 @@ namespace VoidRogues
             if (Camera.main == null)
                 return;
 
-            // Primary: follow the explicitly-set transform (set on spawn)
-            if (followTransform != null)
+            // Primary: follow the explicitly-set transform (set on spawn).
+            // Unity's overridden == operator makes this null when the object is destroyed.
+            if (_followTransform != null)
             {
-                _cameraFollowTarget.position = followTransform.position;
+                _cameraFollowTarget.position = _followTransform.position;
                 return;
             }
 
