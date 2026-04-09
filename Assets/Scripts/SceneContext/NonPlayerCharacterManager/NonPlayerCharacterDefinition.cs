@@ -64,6 +64,16 @@ namespace VoidRogues
         protected Vector2 _modelScale;
         public Vector2 ModelScale => _modelScale;
 
+        [Header("States")]
+        [SerializeField]
+        protected NonPlayerCharacterSpawnState _spawnState;
+        public NonPlayerCharacterSpawnState SpawnState => _spawnState;
+
+        [Header("Tasks")]
+        [SerializeField]
+        private CommandTaskDefinition[] _tasks;
+        public CommandTaskDefinition[] CommandTasks => _tasks;
+
         [Header("Data Definitions Per Spawn Type")]
         [SerializeField]
         private SpawnTypeDataDefinitionEntry[] _spawnTypeDataDefinitions;
