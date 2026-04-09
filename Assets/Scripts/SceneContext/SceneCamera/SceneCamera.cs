@@ -15,6 +15,12 @@ namespace VoidRogues
         [Header("Cinemachine")]
         [SerializeField] private CinemachineVirtualCamera topDownCam;
 
+        /// <summary>
+        /// The transform the camera is actively following.
+        /// Set explicitly by the player character on spawn via <see cref="SetCameraFollow"/>.
+        /// </summary>
+        public Transform followTransform;
+
         protected override void OnInitialize()
         {
             Camera camera = Context.Runner.SimulationUnityScene.FindMainCamera();
@@ -30,6 +36,15 @@ namespace VoidRogues
             }
         }
 
+        /// <summary>
+        /// Explicitly sets the transform the camera should follow.
+        /// Called by the local player character on spawn.
+        /// </summary>
+        public void SetCameraFollow(Transform target)
+        {
+            followTransform = target;
+        }
+
         protected override void OnTick()
         {
             base.OnTick();
@@ -37,7 +52,14 @@ namespace VoidRogues
             if (Camera.main == null)
                 return;
 
-            // Follow the observed player character
+            // Primary: follow the explicitly-set transform (set on spawn)
+            if (followTransform != null)
+            {
+                _cameraFollowTarget.position = followTransform.position;
+                return;
+            }
+
+            // Fallback: follow the observed player character from context
             PlayerCharacter observed = Context.ObservedPlayerCharacter;
             if (observed != null)
             {

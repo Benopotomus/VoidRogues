@@ -42,6 +42,15 @@ namespace VoidRogues
                 Context.LocalPlayerCharacter = this;
                 Context.ObservedPlayerCharacter = this;
                 Context.ObservedPlayerRef = Object.InputAuthority;
+
+                // Explicitly tell the camera to follow this character's transform.
+                // This is more reliable than relying solely on ObservedPlayerCharacter
+                // which can be overwritten by PlayerEntity.FixedUpdateNetwork before
+                // the networked ActivePlayerCharacter property replicates.
+                if (Context.Camera != null)
+                {
+                    Context.Camera.SetCameraFollow(transform);
+                }
             }
         }
 
