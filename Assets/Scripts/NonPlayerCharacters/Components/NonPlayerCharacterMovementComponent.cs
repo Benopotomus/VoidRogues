@@ -8,8 +8,8 @@ namespace VoidRogues
         [SerializeField] private NonPlayerCharacter _npc;
         public NonPlayerCharacter NPC => _npc;
 
-        [SerializeField] private FollowerEntity _follower;
-        public FollowerEntity AIFollower => _follower;
+        private IAstarAI _follower;
+        public IAstarAI AIFollower => _follower;
 
         [SerializeField] private Vector3 _worldVelocity;
         public Vector3 WorldVelocity => _worldVelocity;
@@ -38,6 +38,14 @@ namespace VoidRogues
         {
             _lastPosition = runtimeState.GetPosition();
             _cachedTransform = transform;
+            _follower = GetComponent<IAstarAI>();
+            if (_follower != null)
+            {
+                _follower.updatePosition = _followerUpdatePosition;
+                _follower.updateRotation = _followerUpdateRotation;
+                _follower.canMove = _followerCanMove;
+                _follower.maxSpeed = _followerMaxSpeed;
+            }
         }
 
         public void AuthorityUpdate(NonPlayerCharacterRuntimeState runtimeState, float renderDeltaTime, int tick)
@@ -150,6 +158,7 @@ namespace VoidRogues
             SetFollowerCanMove(false);
             SetMoveTargetPosition(Vector3.zero);
             SetFollowerLocalAvoidance(false);
+            _follower = null;
         }
 
         public void OnStateAuthorityChanged(bool hasAuthority)
