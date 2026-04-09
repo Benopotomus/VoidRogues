@@ -34,6 +34,9 @@ namespace VoidRogues
                 topDownCam.Follow = _cameraFollowTarget;
                 topDownCam.LookAt = _cameraFollowTarget;
             }
+
+            // Tilt the follow target downward so the camera looks down at 60 degrees
+            _cameraFollowTarget.rotation = Quaternion.Euler(60f, 0f, 0f);
         }
 
         /// <summary>
@@ -45,9 +48,9 @@ namespace VoidRogues
             _followTransform = target;
         }
 
-        protected override void OnTick()
+        protected override void OnLateTick()
         {
-            base.OnTick();
+            base.OnLateTick();
 
             if (Camera.main == null)
                 return;
