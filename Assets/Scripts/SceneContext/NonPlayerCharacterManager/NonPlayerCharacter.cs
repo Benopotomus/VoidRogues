@@ -5,152 +5,46 @@ namespace VoidRogues
     /// <summary>
     /// Visual representation of a single NPC in the scene.
     ///
-    /// Following the LichLord <c>NonPlayerCharacter</c> pattern, this is a local-only
-    /// <see cref="MonoBehaviour"/> (no <see cref="Fusion.NetworkObject"/>).
-    /// The <see cref="NonPlayerCharacterManager"/> creates one instance per active NPC slot
+    /// Following the LichLord NonPlayerCharacter pattern, this is a local-only
+    /// MonoBehaviour (no NetworkObject).
+    /// The NonPlayerCharacterReplicator creates one instance per active NPC slot
     /// and drives its state every render frame from the corresponding
-    /// <see cref="NPCState"/> struct.
-    ///
-    /// Responsibilities:
-    ///   - Holds a <see cref="Collider2D"/> for player-interaction raycasts.
-    ///   - Drives the <see cref="Animator"/> based on <see cref="NPCState.AnimState"/>.
-    ///   - Shows/hides the interaction prompt UI element.
-    ///   - Provides a <see cref="SlotIndex"/> so external systems can resolve which
-    ///     NPC a collider belongs to.
+    /// NonPlayerCharacterRuntimeState.
     /// </summary>
-    [RequireComponent(typeof(Collider2D))]
     public class NonPlayerCharacter : CoreBehaviour
     {
-        // ------------------------------------------------------------------
-        // Inspector
-        // ------------------------------------------------------------------
+        private NonPlayerCharacterRuntimeState _runtimeState;
+        public NonPlayerCharacterRuntimeState RuntimeState => _runtimeState;
 
-        [Header("Interaction")]
-        [Tooltip("UI element shown when a player is close enough to interact.")]
-        [SerializeField] private GameObject _interactionPrompt;
+        private NonPlayerCharacterReplicator _replicator;
+        public NonPlayerCharacterReplicator Replicator => _replicator;
 
-        [Header("Visual")]
-        [Tooltip("Optional SpriteRenderer for facing-direction flipping.")]
-        [SerializeField] private SpriteRenderer _spriteRenderer;
+        private NonPlayerCharacterDefinition _definition;
+        public NonPlayerCharacterDefinition Definition => _definition;
 
-        // ------------------------------------------------------------------
-        // Runtime
-        // ------------------------------------------------------------------
-
-        /// <summary>
-        /// Index into <see cref="NonPlayerCharacterManager._npcs"/> array.
-        /// Set when the visual is created.
-        /// </summary>
-        public int SlotIndex { get; private set; } = -1;
-
-        /// <summary>
-        /// The <see cref="NPCDefinition"/> associated with this NPC.
-        /// </summary>
-        public NPCDefinition Definition { get; private set; }
-
-        private Animator   _animator;
-        private Collider2D _collider;
-
-        private byte _lastAnimState = 255; // Force first update
-        private byte _lastDialogueState = 255;
-        private int  _lastInteractingPlayer = -2; // sentinel
-
-        // ------------------------------------------------------------------
-        // API – called by NonPlayerCharacterManager
-        // ------------------------------------------------------------------
-
-        /// <summary>
-        /// Initialises the <see cref="NonPlayerCharacter"/> after instantiation.
-        /// </summary>
-        public void Initialise(int slotIndex, NPCDefinition definition)
+        public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState,
+            NonPlayerCharacterReplicator replicator,
+            bool hasAuthority,
+            int tick)
         {
-            SlotIndex  = slotIndex;
-            Definition = definition;
+            _runtimeState = runtimeState;
+            _replicator = replicator;
+            _definition = runtimeState.Definition;
 
-            _animator  = GetComponentInChildren<Animator>();
-            _collider  = GetComponent<Collider2D>();
+            transform.position = runtimeState.GetPosition();
+            transform.rotation = runtimeState.GetRotation();
 
-            if (_animator != null && definition.AnimatorController != null)
-            {
-                _animator.runtimeAnimatorController = definition.AnimatorController;
-            }
-
-            if (_interactionPrompt != null)
-            {
-                _interactionPrompt.SetActive(false);
-            }
-
-            gameObject.name = $"NPC_{slotIndex}_{definition.NPCName}";
+            gameObject.name = $"NPC_{runtimeState.FullIndex}_{(_definition != null ? _definition.Name : "Unknown")}";
         }
 
-        /// <summary>
-        /// Applies the replicated <see cref="NPCState"/> to the local visual.
-        /// Called each render frame by <see cref="NonPlayerCharacterManager"/>.
-        /// </summary>
-        public void ApplyState(NPCState state)
+        public void OnRender(NonPlayerCharacterRuntimeState renderState,
+            bool hasAuthority,
+            float renderDeltaTime,
+            int tick)
         {
             // Position
-            transform.position = state.Position;
-
-            // Face direction based on velocity
-            if (_spriteRenderer != null && state.Velocity.sqrMagnitude > 0.01f)
-            {
-                _spriteRenderer.flipX = state.Velocity.x < 0f;
-            }
-
-            // Animation state – only update on change to avoid spamming the animator
-            if (state.AnimState != _lastAnimState)
-            {
-                _lastAnimState = state.AnimState;
-                if (_animator != null)
-                {
-                    _animator.SetInteger("State", state.AnimState);
-                }
-            }
-
-            // Dialogue state
-            if (state.DialogueState != _lastDialogueState)
-            {
-                _lastDialogueState = state.DialogueState;
-                if (_animator != null)
-                {
-                    _animator.SetInteger("DialogueState", state.DialogueState);
-                }
-            }
-
-            // Interaction prompt visibility
-            if (state.InteractingPlayer != _lastInteractingPlayer)
-            {
-                _lastInteractingPlayer = state.InteractingPlayer;
-                if (_interactionPrompt != null)
-                {
-                    _interactionPrompt.SetActive(state.InteractingPlayer >= 0);
-                }
-            }
+            transform.position = renderState.GetPosition();
+            transform.rotation = renderState.GetRotation();
         }
-
-        /// <summary>
-        /// Hides the visual and resets cached state.
-        /// Called when the NPC slot is deactivated.
-        /// </summary>
-        public void Deactivate()
-        {
-            gameObject.SetActive(false);
-            _lastAnimState = 255;
-            _lastDialogueState = 255;
-            _lastInteractingPlayer = -2;
-
-            if (_interactionPrompt != null)
-            {
-                _interactionPrompt.SetActive(false);
-            }
-        }
-
-        // ------------------------------------------------------------------
-        // Public accessors for external systems
-        // ------------------------------------------------------------------
-
-        /// <summary>Returns the <see cref="Collider2D"/> used for interaction raycasts.</summary>
-        public Collider2D GetCollider() => _collider;
     }
 }

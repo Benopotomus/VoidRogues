@@ -5,9 +5,8 @@ namespace VoidRogues
     /// <summary>
     /// Runtime debugger for the NPC system.
     ///
-    /// Draws an on-screen overlay showing active NPC count, per-NPC state, and
-    /// gizmos in the Scene view. Attach alongside
-    /// <see cref="NonPlayerCharacterManager"/> on the SceneContext hierarchy.
+    /// Draws an on-screen overlay showing active NPC states from the replicator system.
+    /// Attach alongside NonPlayerCharacterManager on the SceneContext hierarchy.
     ///
     /// Toggled at runtime via <see cref="_toggleKey"/> (default: F9).
     /// </summary>
@@ -22,9 +21,6 @@ namespace VoidRogues
 
         [Tooltip("Color used for NPC gizmo circles.")]
         [SerializeField] private Color _gizmoColor = Color.cyan;
-
-        [Tooltip("Color used for NPC wander-target gizmo.")]
-        [SerializeField] private Color _wanderTargetColor = Color.yellow;
 
         [Header("References")]
         [Tooltip("NonPlayerCharacterManager to debug. Auto-resolves from sibling/parent if null.")]
@@ -73,46 +69,50 @@ namespace VoidRogues
                 return;
             }
 
-            float panelWidth  = 420f;
+            float panelWidth  = 500f;
             float panelHeight = 500f;
 
             GUILayout.BeginArea(new Rect(10, 10, panelWidth, panelHeight), GUI.skin.box);
 
             GUILayout.Label($"<b>NPC Debugger</b>  (toggle: {_toggleKey})");
-            GUILayout.Label($"Active NPCs: <b>{manager.ActiveNPCCount}</b> / {NonPlayerCharacterManager.MaxNPCs}");
             GUILayout.Space(4);
 
             _scrollPos = GUILayout.BeginScrollView(_scrollPos, GUILayout.Height(panelHeight - 80));
 
-            for (int i = 0; i < NonPlayerCharacterManager.MaxNPCs; i++)
+            // Iterate through replicators and display active NPC data
+            int totalActive = 0;
+            for (int fullIndex = 0; fullIndex < NonPlayerCharacterConstants.MAX_NPC_REPS * NonPlayerCharacterConstants.MAX_REPLICATORS; fullIndex++)
             {
-                var state = manager.GetNPCState(i);
-                if (!state.IsActive) continue;
+                var runtimeState = manager.GetNpcRuntimeStateAtIndex(fullIndex);
+                if (runtimeState == null) continue;
+                if (!runtimeState.IsActive()) continue;
 
-                string animName = state.AnimState switch
+                totalActive++;
+
+                string stateName = runtimeState.GetState().ToString();
+                string spawnType = runtimeState.GetSpawnType().ToString();
+                Vector3 pos = runtimeState.GetPosition();
+
+                int health = -1;
+                int maxHealth = 0;
+                if (runtimeState.Definition != null && runtimeState.DataDefinition != null)
                 {
-                    0 => "Idle",
-                    1 => "Walk",
-                    2 => "Talk",
-                    3 => "Interact",
-                    _ => $"Unknown({state.AnimState})"
-                };
+                    health = runtimeState.GetHealth();
+                    maxHealth = runtimeState.GetMaxHealth();
+                }
 
-                string dialogueName = state.DialogueState switch
-                {
-                    0 => "None",
-                    1 => "Greeting",
-                    2 => "InDialogue",
-                    3 => "Farewell",
-                    _ => $"Unknown({state.DialogueState})"
-                };
+                string healthStr = health >= 0 ? $"HP:{health}/{maxHealth}" : "HP:N/A";
 
-                string interacting = state.InteractingPlayer >= 0
-                    ? $"Player {state.InteractingPlayer}"
-                    : "—";
+                GUILayout.Label($"[{fullIndex}] {spawnType}  State:{stateName}  Pos:({pos.x:F1},{pos.y:F1},{pos.z:F1})  {healthStr}");
+            }
 
-                GUILayout.Label($"[{i}] Type:{state.TypeIndex}  Pos:{state.Position:F1}  " +
-                                $"Anim:{animName}  Dlg:{dialogueName}  Int:{interacting}");
+            if (totalActive == 0)
+            {
+                GUILayout.Label("No active NPCs.");
+            }
+            else
+            {
+                GUILayout.Label($"\nTotal active: {totalActive}");
             }
 
             GUILayout.EndScrollView();
@@ -130,25 +130,20 @@ namespace VoidRogues
             var manager = ResolveManager();
             if (manager == null) return;
 
-            for (int i = 0; i < NonPlayerCharacterManager.MaxNPCs; i++)
+            for (int fullIndex = 0; fullIndex < NonPlayerCharacterConstants.MAX_NPC_REPS * NonPlayerCharacterConstants.MAX_REPLICATORS; fullIndex++)
             {
-                var state = manager.GetNPCState(i);
-                if (!state.IsActive) continue;
+                var runtimeState = manager.GetNpcRuntimeStateAtIndex(fullIndex);
+                if (runtimeState == null) continue;
+                if (!runtimeState.IsActive()) continue;
 
-                Vector3 pos = new Vector3(state.Position.x, state.Position.y, 0f);
+                Vector3 pos = runtimeState.GetPosition();
 
                 // NPC position circle
                 Gizmos.color = _gizmoColor;
                 Gizmos.DrawWireSphere(pos, 0.3f);
 
-                // Wander target
-                Gizmos.color = _wanderTargetColor;
-                Vector3 wanderPos = new Vector3(state.WanderTarget.x, state.WanderTarget.y, 0f);
-                Gizmos.DrawLine(pos, wanderPos);
-                Gizmos.DrawWireSphere(wanderPos, 0.1f);
-
 #if UNITY_EDITOR
-                UnityEditor.Handles.Label(pos + Vector3.up * 0.4f, $"NPC[{i}]");
+                UnityEditor.Handles.Label(pos + Vector3.up * 0.4f, $"NPC[{fullIndex}]");
 #endif
             }
         }
