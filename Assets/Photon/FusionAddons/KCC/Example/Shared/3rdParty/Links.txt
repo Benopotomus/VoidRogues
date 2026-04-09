@@ -1,0 +1,5 @@
+This sample has been made possible thanks to the support of third party creators. The project uses following assets:
+
+Modular Terrain Pack - https://fertile-soil-productions.itch.io/modular-terrain-pack
+Modular Village Pack - https://fertile-soil-productions.itch.io/modular-village-pack
+Low Poly Space Pack - https://opengameart.org/content/low-poly-space-pack

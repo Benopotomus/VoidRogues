@@ -1,0 +1,92 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ad25162401941342a88e72432d7aae1, type: 3}
+  m_Name: PhotonMenuConfig
+  m_EditorClassIdentifier: 
+  _maxPlayers: 10
+  _adaptFramerateForMobilePlatform: 0
+  _availableAppVersions: []
+  _availableRegions:
+  - eu
+  - us
+  _availableScenes:
+  - Name: Showcase
+    ScenePath: Assets/Example/00_Showcase/Showcase.unity
+    Preview: {fileID: 21300000, guid: 77f6da7b01aef3b428c50bb04d39cc74, type: 3}
+  - Name: Basic Movement
+    ScenePath: Assets/Example/01_PlayerMovement/01_BasicMovement/BasicMovement.unity
+    Preview: {fileID: 21300000, guid: 4412454076db57a4793ec450b955838a, type: 3}
+  - Name: Advanced Movement
+    ScenePath: Assets/Example/01_PlayerMovement/02_AdvancedMovement/AdvancedMovement.unity
+    Preview: {fileID: 21300000, guid: 4412454076db57a4793ec450b955838a, type: 3}
+  - Name: Expert Movement
+    ScenePath: Assets/Example/01_PlayerMovement/03_ExpertMovement/ExpertMovement.unity
+    Preview: {fileID: 21300000, guid: 4412454076db57a4793ec450b955838a, type: 3}
+  - Name: Top-Down Movement
+    ScenePath: Assets/Example/01_PlayerMovement/04_TopDownMovement/TopDownMovement.unity
+    Preview: {fileID: 21300000, guid: 4412454076db57a4793ec450b955838a, type: 3}
+  - Name: Teleports
+    ScenePath: Assets/Example/03_Interactions/01_Teleport/Teleports.unity
+    Preview: {fileID: 21300000, guid: 43885c3cd50026249a6ad4c1eea056b2, type: 3}
+  - Name: Portals
+    ScenePath: Assets/Example/03_Interactions/02_Portal/Portals.unity
+    Preview: {fileID: 21300000, guid: ee92d618a3d8ea54d881244e6afc94cb, type: 3}
+  - Name: Jump Pads
+    ScenePath: Assets/Example/03_Interactions/03_JumpPad/JumpPads.unity
+    Preview: {fileID: 21300000, guid: dc2524e4452aa044c9993239cd516cc1, type: 3}
+  - Name: Attractors
+    ScenePath: Assets/Example/03_Interactions/04_Attractor/Attractors.unity
+    Preview: {fileID: 21300000, guid: fef9bd0385254f0428af279d6680eec7, type: 3}
+  - Name: Moving Platforms
+    ScenePath: Assets/Example/03_Interactions/05_MovingPlatform/MovingPlatforms.unity
+    Preview: {fileID: 21300000, guid: 954d14548c9e44843b9c2f82322277a0, type: 3}
+  - Name: Environments
+    ScenePath: Assets/Example/03_Interactions/06_Environments/Environments.unity
+    Preview: {fileID: 21300000, guid: 78ff304d2ea7a5b4d83570c524bbdff8, type: 3}
+  - Name: Forces
+    ScenePath: Assets/Example/03_Interactions/07_Forces/Forces.unity
+    Preview: {fileID: 21300000, guid: 0fa148fe3c6c07c459d5d26b972abd00, type: 3}
+  - Name: Speed Modifiers
+    ScenePath: Assets/Example/03_Interactions/08_SpeedModifiers/SpeedModifiers.unity
+    Preview: {fileID: 21300000, guid: 26144b639e8976c4889625b2675dbc7b, type: 3}
+  - Name: Miscellaneous
+    ScenePath: Assets/Example/03_Interactions/09_Miscellaneous/Miscellaneous.unity
+    Preview: {fileID: 21300000, guid: 087cdc4ec4ca8644cb3ec75fd2fbccc0, type: 3}
+  - Name: Replication
+    ScenePath: Assets/Example/03_Interactions/10_Replication/Replication.unity
+    Preview: {fileID: 21300000, guid: 154942503a442d64c8b48de906ab0017, type: 3}
+  - Name: Simple NPC
+    ScenePath: Assets/Example/04_AI/01_SimpleNPC/SimpleNPC.unity
+    Preview: {fileID: 21300000, guid: 1399a75453014134cb4d0ad70f3c33e1, type: 3}
+  - Name: NavMesh NPC
+    ScenePath: Assets/Example/04_AI/02_NavMeshNPC/NavMeshNPC.unity
+    Preview: {fileID: 21300000, guid: 23a3c1eb412641b4ea22ae7622aabaa3, type: 3}
+  - Name: Stairs
+    ScenePath: Assets/Example/A1_Playgrounds/Stairs.unity
+    Preview: {fileID: 21300000, guid: 7ce03c925ded43941995bd697e4a1102, type: 3}
+  - Name: Slopes
+    ScenePath: Assets/Example/A1_Playgrounds/Slopes.unity
+    Preview: {fileID: 21300000, guid: 415239ec0aac0ac4a99dedbdf07e6632, type: 3}
+  - Name: Corridors
+    ScenePath: Assets/Example/A1_Playgrounds/Corridors.unity
+    Preview: {fileID: 21300000, guid: d2ce295400411334782cfc064d364041, type: 3}
+  - Name: Gaps
+    ScenePath: Assets/Example/A1_Playgrounds/Gaps.unity
+    Preview: {fileID: 21300000, guid: ee3f5b5cd4c13be43958151ba6dc3677, type: 3}
+  - Name: Terrains
+    ScenePath: Assets/Example/A1_Playgrounds/Terrains.unity
+    Preview: {fileID: 21300000, guid: 9b496e53ba934354599fef5aefd99aa0, type: 3}
+  - Name: Input Smoothing
+    ScenePath: Assets/Example/06_Debug/02_InputSmoothing/InputSmoothing.unity
+    Preview: {fileID: 21300000, guid: d8143da4fc2d1d74d85d82e6c5fd26db, type: 3}
+  _machineId: {fileID: -755480892457977500, guid: 14d0ba76e6402554fb21eb7d976871ff, type: 3}
+  _codeGenerator: {fileID: 11400000, guid: 2d88136449f10fb4da15557de6b21b72, type: 2}
