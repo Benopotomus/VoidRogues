@@ -126,6 +126,11 @@ namespace VoidRogues.Players
             //_playerDataSent = false;
             _initCounter = 10;
 
+            if (HasStateAuthority)
+            {
+                SyncToken = 1;
+            }
+
             if (HasInputAuthority && Context != null)
             {
                 Context.LocalPlayerRef = Object.InputAuthority;
@@ -267,12 +272,12 @@ namespace VoidRogues.Players
         public static PlayerEntity GetPlayerEntity(NetworkRunner runner, PlayerRef playerRef)
         {
             if (playerRef.IsRealPlayer == false)
-                return default;
+                return null;
 
             if(runner == null)
             {
                 Debug.LogError("Runner is null when trying to get player entity for player ref " + playerRef);
-                return default;
+                return null;
             }
 
             var playerEntities = runner.GetAllBehaviours<PlayerEntity>();
@@ -284,7 +289,7 @@ namespace VoidRogues.Players
                     return player;
             }
 
-            return default;
+            return null;
         }
 
     }

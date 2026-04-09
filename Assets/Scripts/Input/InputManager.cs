@@ -141,6 +141,9 @@ namespace VoidRogues
 
         private void UpdateFocusedWidget()
         {
+            if (EventSystem.current == null)
+                return;
+
             if (FocusedWidget != EventSystem.current.currentSelectedGameObject)
             {
                 FocusedWidget = EventSystem.current.currentSelectedGameObject;

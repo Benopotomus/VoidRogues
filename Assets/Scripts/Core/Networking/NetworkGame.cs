@@ -134,6 +134,9 @@ namespace VoidRogues
                 Debug.Log("Spawning Players");
                 foreach (var playerRef in Runner.ActivePlayers)
                 {
+                    if (PlayerEntity.GetPlayerEntity(Runner, playerRef) != null || _pendingPlayers.ContainsKey(playerRef))
+                        continue;
+
                     SpawnPlayer(playerRef);
                 }
             }
@@ -157,26 +160,6 @@ namespace VoidRogues
             //    yield return null;
 
             GameLoaded?.Invoke();
-        }
-
-        public PlayerEntity GetPlayerEntity(PlayerRef playerRef)
-        {
-            if (playerRef.IsRealPlayer == false)
-                return default;
-            if (Object == null)
-                return default;
-
-            _spawnedPlayers.Clear();
-            Runner.GetAllBehaviours<PlayerEntity>(_spawnedPlayers);
-
-            for (int i = 0, count = _spawnedPlayers.Count; i < count; ++i)
-            {
-                PlayerEntity player = _spawnedPlayers[i];
-                if (player.Object.InputAuthority == playerRef)
-                    return player;
-            }
-
-            return default;
         }
 
         // NetworkBehaviour INTERFACE
@@ -294,6 +277,9 @@ namespace VoidRogues
             if (!HasStateAuthority)
                 return;
 
+            if (PlayerEntity.GetPlayerEntity(Runner, playerRef) != null || _pendingPlayers.ContainsKey(playerRef))
+                return;
+
             SpawnPlayer(playerRef);
         }
 
@@ -304,7 +290,7 @@ namespace VoidRogues
             if (!HasStateAuthority)
                 return;
 
-            OnPlayerLeft(GetPlayerEntity(playerRef));
+            OnPlayerLeft(PlayerEntity.GetPlayerEntity(Runner, playerRef));
         }
 
         private void OnPlayerLeft(PlayerEntity player)
@@ -409,7 +395,7 @@ namespace VoidRogues
 
         private void SpawnPlayer(PlayerRef playerRef)
         {
-            if (GetPlayerEntity(playerRef) != null || _pendingPlayers.ContainsKey(playerRef) == true)
+            if (PlayerEntity.GetPlayerEntity(Runner, playerRef) != null || _pendingPlayers.ContainsKey(playerRef) == true)
             {
                 Log.Warn($"Player for {playerRef} is already spawned!");
                 return;

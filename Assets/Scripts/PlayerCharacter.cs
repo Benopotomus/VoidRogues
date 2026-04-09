@@ -3,6 +3,7 @@ namespace VoidRogues
     using Fusion;
     using Fusion.Addons.KCC;
     using UnityEngine;
+    using VoidRogues.Players;
 
     /// <summary>
     /// Networked player character that reads <see cref="GameInput"/> from
@@ -20,6 +21,8 @@ namespace VoidRogues
         /// </summary>
         public PlayerCharacterInput Input { get; private set; }
 
+        public PlayerEntity OwningPlayer { get; set; }
+
         // PRIVATE MEMBERS
 
         private KCC _kcc;
@@ -31,9 +34,14 @@ namespace VoidRogues
             _kcc = GetComponent<KCC>();
             Input = GetComponent<PlayerCharacterInput>();
 
+            // Link back to the owning PlayerEntity
+            OwningPlayer = PlayerEntity.GetPlayerEntity(Runner, Object.InputAuthority);
+
             if (HasInputAuthority && Context != null)
             {
                 Context.LocalPlayerCharacter = this;
+                Context.ObservedPlayerCharacter = this;
+                Context.ObservedPlayerRef = Object.InputAuthority;
             }
         }
 

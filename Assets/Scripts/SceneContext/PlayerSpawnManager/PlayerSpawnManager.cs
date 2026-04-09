@@ -28,28 +28,37 @@ namespace VoidRogues
 
             foreach (PlayerEntity playerEntity in playerEntities)
             {
-                Debug.Log("Try to spawn player");
+                Debug.Log("Try to spawn player character");
                 TrySpawnPlayerCharacter(playerEntity);
             }
         }
 
         public PlayerCharacter TrySpawnPlayerCharacter(PlayerEntity playerEntity)
         {
+            if (playerEntity.ActivePlayerCharacter != null && playerEntity.ActivePlayerCharacter.Object != null)
+                return playerEntity.ActivePlayerCharacter;
+
             (Vector3, Quaternion) spawnPosition = GetSpawnPosition();
             var playerRef = playerEntity.Object.InputAuthority;
 
-            var spawnedCreature = Runner.Spawn(_playerPrefab, spawnPosition.Item1, Quaternion.identity, playerRef, (runner, obj) =>
+            var spawnedPlayerCharacter = Runner.Spawn(_playerPrefab, spawnPosition.Item1, Quaternion.identity, playerRef, (runner, obj) =>
             {
-
+                // Set owner reference immediately in the spawn callback,
+                // before Spawned() is called on clients
+                var character = obj.GetComponent<PlayerCharacter>();
+                if (character != null)
+                {
+                    character.OwningPlayer = playerEntity;
+                }
             });
 
-            Runner.SetPlayerAlwaysInterested(playerRef, spawnedCreature.Object, true);
+            Runner.SetPlayerAlwaysInterested(playerRef, spawnedPlayerCharacter.Object, true);
 
             playerEntity.Statistics.IsAlive = true;
             playerEntity.Statistics.RespawnTimer = default;
+            playerEntity.ActivePlayerCharacter = spawnedPlayerCharacter;
 
-            playerEntity.ActivePlayerCharacter = spawnedCreature;
-            return spawnedCreature;
+            return spawnedPlayerCharacter;
         }
 
         private string GetInstanceId()
