@@ -1,21 +1,52 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
-
 namespace VoidRogues
 {
+    using Fusion;
+    using Fusion.Addons.KCC;
+    using UnityEngine;
+
+    /// <summary>
+    /// Networked player character that reads <see cref="GameInput"/> from
+    /// Fusion's input pipeline and drives a <see cref="KCC"/>
+    /// on the XZ plane (3D movement with gravity).
+    /// </summary>
+    [RequireComponent(typeof(KCC))]
     public class PlayerCharacter : ContextBehaviour
     {
-        // Start is called before the first frame update
-        void Start()
+        // PUBLIC MEMBERS
+
+        /// <summary>
+        /// Input provider that lives on this character.
+        /// Registers with Fusion's runner callbacks when this is the local player.
+        /// </summary>
+        public PlayerCharacterInput Input { get; private set; }
+
+        // PRIVATE MEMBERS
+
+        private KCC _kcc;
+
+        // NetworkBehaviour INTERFACE
+
+        public override void Spawned()
         {
-        
+            _kcc = GetComponent<KCC>();
+            Input = GetComponent<PlayerCharacterInput>();
+
+            if (HasInputAuthority && Context != null)
+            {
+                Context.LocalPlayerCharacter = this;
+            }
         }
 
-        // Update is called once per frame
-        void Update()
+        public override void FixedUpdateNetwork()
         {
-        
+            if (GetInput(out GameInput input))
+            {
+                // Convert 2D input (WASD / stick) to a 3D direction on the XZ plane.
+                // MoveDirection is a Vector2: X = left/right, Y = forward/back.
+                // Mapped to world XZ: Vector2.X → World X, Vector2.Y → World Z.
+                Vector3 moveDirection = new Vector3(input.MoveDirection.x, 0f, input.MoveDirection.y);
+                _kcc.SetInputDirection(moveDirection);
+            }
         }
     }
 }
