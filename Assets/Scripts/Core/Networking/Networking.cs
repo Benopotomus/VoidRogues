@@ -63,6 +63,12 @@ namespace VoidRogues
                 return;
             }
 
+            if (request.GameMode != GameMode.Single && request.GameMode != GameMode.AutoHostOrClient)
+            {
+                Debug.LogError($"Networking: Unsupported GameMode '{request.GameMode}'. Only Single and AutoHostOrClient are supported.");
+                return;
+            }
+
             _cachedSessionName = request.SessionName;
             if (request.GameMode == GameMode.Single && string.IsNullOrEmpty(_cachedSessionName))
             {
@@ -74,6 +80,10 @@ namespace VoidRogues
             if (sceneIndex >= 0)
             {
                 sceneRef = SceneRef.FromIndex(sceneIndex);
+            }
+            else
+            {
+                Debug.LogError($"Scene path '{request.ScenePath}' not found in Build Settings!");
             }
 
             NetworkSceneInfo sceneInfo = new NetworkSceneInfo();
@@ -91,7 +101,7 @@ namespace VoidRogues
 
             Log($"StartGame() UserID:{request.UserID} GameMode:{request.GameMode} " +
                 $"DisplayName:{request.DisplayName} SessionName:{request.SessionName} ScenePath:{request.ScenePath} " +
-                $" MaxPlayers:{request.MaxPlayers} CustomLobby:{request.CustomLobby}");
+                $" MaxPlayers:{request.MaxPlayers}");
 
             _state = ConnectionState.Connecting;
             Status = "Starting";
@@ -188,38 +198,49 @@ namespace VoidRogues
             _runner = runner;
             _sceneManager = runner.GetComponent<NetworkSceneManager>();
 
+            // AutoHostOrClient requires a session name to resolve matchmaking.
+            // If none was provided, fall back to a default so the task completes.
+            string sessionName = null;
+            if (_gameMode == GameMode.AutoHostOrClient)
+            {
+                sessionName = _request.SessionName;
+                if (string.IsNullOrEmpty(sessionName))
+                {
+                    sessionName = "Default";
+                    Log($"AutoHostOrClient: No session name provided, using '{sessionName}'");
+                }
+            }
+
             StartGameArgs startGameArgs = new StartGameArgs
             {
                 GameMode = _gameMode,
-                SessionName = _gameMode != GameMode.Single ? _request.SessionName : null,
+                SessionName = sessionName,
                 Scene = _sceneInfo,
                 OnGameStarted = OnGameInitialized,
                 ObjectProvider = pool,
-                CustomLobbyName = _gameMode != GameMode.Single ? _request.CustomLobby : null,
                 SceneManager = _sceneManager,
-                EnableClientSessionCreation = _gameMode == GameMode.Shared || _gameMode == GameMode.AutoHostOrClient
             };
 
-            if (_request.MaxPlayers > 0 && _gameMode != GameMode.Single)
+            if (_request.MaxPlayers > 0 && _gameMode == GameMode.AutoHostOrClient)
             {
                 startGameArgs.PlayerCount = _request.MaxPlayers;
             }
 
-            if (_gameMode != GameMode.Single && _gameMode != GameMode.Client)
+            if (_gameMode == GameMode.AutoHostOrClient)
             {
                 startGameArgs.SessionProperties = CreateSessionProperties(_request);
             }
 
-            if (!string.IsNullOrEmpty(_request.IPAddress) && _gameMode != GameMode.Single)
+            if (!string.IsNullOrEmpty(_request.IPAddress) && _gameMode == GameMode.AutoHostOrClient)
             {
                 startGameArgs.Address = NetAddress.CreateFromIpPort(_request.IPAddress, _request.Port);
             }
-            else if (_request.Port > 0 && _gameMode != GameMode.Single)
+            else if (_request.Port > 0 && _gameMode == GameMode.AutoHostOrClient)
             {
                 startGameArgs.Address = NetAddress.Any(_request.Port);
             }
 
-            Log($"NetworkRunner.StartGame()");
+            Log($"NetworkRunner.StartGame() SessionName:{sessionName} GameMode:{_gameMode}");
             Task<StartGameResult> startGameTask = runner.StartGame(startGameArgs);
 
             while (!startGameTask.IsCompleted)
@@ -246,7 +267,7 @@ namespace VoidRogues
 
             if (!result.Ok)
             {
-                Debug.LogError($"Runner failed to start! Result: {result}");
+                Debug.LogError($"Runner failed to start! Result: {result}, ShutdownReason: {result.ShutdownReason}, ErrorMessage: {result.ErrorMessage}");
                 ErrorStatus = result.ShutdownReason == ShutdownReason.GameNotFound ? STATUS_SERVER_CLOSED : StringToLabel(result.ShutdownReason.ToString());
                 yield return DisconnectCoroutine();
                 yield break;
@@ -384,7 +405,7 @@ namespace VoidRogues
                 Debug.Log($"Shutdown {_runner.name}");
                 try
                 {
-                    if (_gameMode != GameMode.Single && _runner.SessionInfo != null)
+                    if (_gameMode == GameMode.AutoHostOrClient && _runner.SessionInfo != null)
                     {
                         Log($"Closing the room");
                         _runner.SessionInfo.IsOpen = false;
@@ -454,10 +475,13 @@ namespace VoidRogues
         /// <summary>
         /// Checks if the runner is connected, without relying on <see cref="_state"/>.
         /// Used during the connect coroutine before the state transitions to Connected.
+        /// For AutoHostOrClient, this peer may have become the host (IsServer),
+        /// in which case IsConnectedToServer is false but the runner is fully operational.
         /// </summary>
         private bool IsRunnerConnected()
         {
-            return _runner != null && _runner.IsRunning && (_gameMode == GameMode.Single || _runner.IsConnectedToServer);
+            return _runner != null && _runner.IsRunning &&
+                   (_gameMode == GameMode.Single || _runner.IsServer || _runner.IsConnectedToServer);
         }
 
         private void ClearSession()
