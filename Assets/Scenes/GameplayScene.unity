@@ -1223,7 +1223,7 @@ MonoBehaviour:
   _defaultConfiguration:
     GameSessionID: 0
     LevelSeed: 0
-    GameMode: 1
+    GameMode: 6
     ServerName: VoidRogues
     MaxPlayers: 0
     ExtraPeers: 0

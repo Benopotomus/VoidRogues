@@ -151,7 +151,7 @@ namespace VoidRogues
             if (_state == ConnectionState.Connected && _coroutine == null)
             {
                 bool runnerLost = _runner == null || !_runner.IsRunning;
-                bool serverLost = !runnerLost && _gameMode != GameMode.Single && !_runner.IsConnectedToServer;
+                bool serverLost = !runnerLost && _gameMode != GameMode.Single && !_runner.IsServer && !_runner.IsConnectedToServer;
 
                 if (runnerLost || serverLost || _stopRequested)
                 {
