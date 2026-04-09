@@ -45,6 +45,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b2ace18cb908d2e49861a58e7f1fa112, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _Index: 0
+  _loadStates: []
   hitMask:
     serializedVersion: 2
     m_Bits: 4294967295
@@ -60,7 +62,7 @@ MonoBehaviour:
   m_Script: {fileID: -1552182283, guid: e725a070cec140c4caffb81624c8c787, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  SortKey: 1234567890
+  SortKey: 334018308
   ObjectInterest: 1
   Flags: 262145
   NestedObjects: []

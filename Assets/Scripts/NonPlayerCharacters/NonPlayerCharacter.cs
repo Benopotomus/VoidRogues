@@ -46,14 +46,8 @@ namespace VoidRogues
         [SerializeField] private NonPlayerCharacterSpawningComponent _spawningComponent;
         public NonPlayerCharacterSpawningComponent SpawningComponent => _spawningComponent;
 
-        [SerializeField] private NonPlayerCharacterAttitudeComponent _attitude;
-        public NonPlayerCharacterAttitudeComponent Attitude => _attitude;
-
         [SerializeField] private NonPlayerCharacterWeaponsComponent _weapons;
         public NonPlayerCharacterWeaponsComponent Weapons => _weapons;
-
-        [SerializeField] private NonPlayerCharacterCarriedItemComponent _carriedItem;
-        public NonPlayerCharacterCarriedItemComponent CarriedItem => _carriedItem;
 
         [SerializeField] private NonPlayerCharacterLifetimeComponent _lifetime;
         public NonPlayerCharacterLifetimeComponent Lifetime => _lifetime;
@@ -61,8 +55,8 @@ namespace VoidRogues
         [SerializeField] private MeleeHitTrackerComponent _meleeHitTracker;
         public MeleeHitTrackerComponent MeleeHitTracker => _meleeHitTracker;
 
-        [SerializeField] private Collider _collider;
-        public new Collider Collider => _collider;
+        [SerializeField] private CapsuleCollider _collider;
+        public CapsuleCollider Collider => _collider;
 
         // Cached transform shortcut (matches LichLord pattern)
         public Transform CachedTransform => transform;

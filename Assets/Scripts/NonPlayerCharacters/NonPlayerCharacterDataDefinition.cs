@@ -18,8 +18,6 @@ namespace VoidRogues
         protected const int TEAM_SHIFT = SPAWN_TYPE_SHIFT + SPAWN_TYPE_BITS;
         protected const byte TEAM_MASK = (1 << TEAM_BITS) - 1;
 
-        private const int RESERVED_DIALOG_BITS = 5;        // reserved, previously dialog index
-        protected const int RESERVED_DIALOG_SHIFT = TEAM_SHIFT + TEAM_BITS;
         // 19 total
 
         // Condition (byte)

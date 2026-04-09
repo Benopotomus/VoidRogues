@@ -96,26 +96,6 @@ namespace VoidRogues
             SpawnNPC(ref data);
         }
 
-        public int SpawnNPCWorker(Vector3 spawnPos, NonPlayerCharacterDefinition definition, ETeamID teamID, int strongholdId, int workerIndex)
-        {
-            if (!Runner.IsSharedModeMasterClient && Runner.GameMode != GameMode.Single)
-                return -1;
-
-            FNonPlayerCharacterData data = CreateNPCData(spawnPos, definition, ENPCSpawnType.Worker, teamID, EAttitude.Passive);
-
-            var workerData = definition.GetDataDefinition(ENPCSpawnType.Worker) as WorkerDataDefinition;
-            if (workerData == null)
-            {
-                Debug.Log("Trying to spawn a non-worker as a worker");
-                return -1;
-            }
-
-            workerData.SetState(ENPCState.Spawning, ref data);
-            workerData.SetStrongholdId(strongholdId, ref data);
-            workerData.SetWorkerIndex(workerIndex, ref data);
-
-            return SpawnNPC(ref data);
-        }
 
         public NonPlayerCharacterReplicator GetReplicatorForIndex(int replicatorIndex)
         {
