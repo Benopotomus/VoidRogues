@@ -8,7 +8,7 @@ namespace VoidRogues
     /// <summary>
     /// Networked player character that reads <see cref="GameInput"/> from
     /// Fusion's input pipeline and drives a <see cref="KCC"/>
-    /// on the XZ plane (3D movement with gravity).
+    /// on the XZ plane (no gravity, locked vertical axis).
     /// </summary>
     [RequireComponent(typeof(KCC))]
     public class PlayerCharacter : ContextBehaviour
@@ -26,6 +26,7 @@ namespace VoidRogues
         // PRIVATE MEMBERS
 
         private KCC _kcc;
+        private NoGravityXZMovementProcessor _noGravityProcessor;
 
         // NetworkBehaviour INTERFACE
 
@@ -36,6 +37,16 @@ namespace VoidRogues
 
             // Link back to the owning PlayerEntity
             OwningPlayer = PlayerEntity.GetPlayerEntity(Runner, Object.InputAuthority);
+
+            // Disable gravity and lock vertical axis via a custom KCC processor
+            _noGravityProcessor = gameObject.AddComponent<NoGravityXZMovementProcessor>();
+            _kcc.AddLocalProcessor(_noGravityProcessor);
+
+            // Immediately zero out any gravity on the KCC data to prevent a single-frame drop
+            _kcc.FixedData.Gravity = Vector3.zero;
+            _kcc.RenderData.Gravity = Vector3.zero;
+            _kcc.FixedData.DynamicVelocity = Vector3.zero;
+            _kcc.RenderData.DynamicVelocity = Vector3.zero;
 
             if (HasInputAuthority && Context != null)
             {
@@ -61,6 +72,7 @@ namespace VoidRogues
                 // Convert 2D input (WASD / stick) to a 3D direction on the XZ plane.
                 // MoveDirection is a Vector2: X = left/right, Y = forward/back.
                 // Mapped to world XZ: Vector2.X → World X, Vector2.Y → World Z.
+                // Y is explicitly zeroed to prevent any off-axis movement.
                 Vector3 moveDirection = new Vector3(input.MoveDirection.x, 0f, input.MoveDirection.y);
                 _kcc.SetInputDirection(moveDirection);
             }
