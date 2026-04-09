@@ -12,6 +12,14 @@ namespace VoidRogues
     [RequireComponent(typeof(KCC))]
     public class PlayerCharacter : ContextBehaviour
     {
+        // PUBLIC MEMBERS
+
+        /// <summary>
+        /// Input provider that lives on this character.
+        /// Registers with Fusion's runner callbacks when this is the local player.
+        /// </summary>
+        public PlayerCharacterInput Input { get; private set; }
+
         // PRIVATE MEMBERS
 
         private KCC _kcc;
@@ -21,6 +29,7 @@ namespace VoidRogues
         public override void Spawned()
         {
             _kcc = GetComponent<KCC>();
+            Input = GetComponent<PlayerCharacterInput>();
 
             if (HasInputAuthority && Context != null)
             {

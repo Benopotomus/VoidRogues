@@ -40,12 +40,6 @@ namespace VoidRogues.Players
         public SceneContext Context { get; set; }
         public bool IsInitialized => _initCounter <= 0;
 
-        /// <summary>
-        /// Input provider that lives on this entity.
-        /// Registers with Fusion's runner callbacks when this is the local player.
-        /// </summary>
-        public PlayerCharacterInput Input { get; private set; }
-
         [Networked]
         public PlayerCharacter ActivePlayerCharacter { get; set; }
 
@@ -131,8 +125,6 @@ namespace VoidRogues.Players
             _observedPlayer = Object.InputAuthority;
             //_playerDataSent = false;
             _initCounter = 10;
-
-            Input = GetComponent<PlayerCharacterInput>();
 
             if (HasInputAuthority && Context != null)
             {

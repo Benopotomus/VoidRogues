@@ -11,7 +11,7 @@ namespace VoidRogues
     /// feeds a <see cref="GameInput"/> struct into Fusion's input pipeline via
     /// <see cref="INetworkRunnerCallbacks.OnInput"/>.
     ///
-    /// Lives on the <see cref="PlayerEntity"/> prefab (follows the HeroInput / HeroEntity pattern).
+    /// Lives on the <see cref="PlayerCharacter"/> prefab (follows the HeroInput / HeroEntity pattern).
     /// Registers itself with the runner only when it has input authority (i.e. the local player).
     /// </summary>
     [DefaultExecutionOrder(-15)] // After InputManager (-20)
