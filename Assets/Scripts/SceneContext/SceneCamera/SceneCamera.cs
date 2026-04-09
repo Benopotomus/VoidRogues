@@ -13,7 +13,7 @@ namespace VoidRogues
         public Transform _cameraFollowTarget;
 
         [Header("Cinemachine")]
-        [SerializeField] private CinemachineVirtualCamera thirdPersonCam;
+        [SerializeField] private CinemachineVirtualCamera topDownCam;
 
         protected override void OnInitialize()
         {
@@ -23,10 +23,10 @@ namespace VoidRogues
                 camera.gameObject.SetActive(true);
             }
 
-            if (thirdPersonCam != null)
+            if (topDownCam != null)
             {
-                thirdPersonCam.Follow = _cameraFollowTarget;
-                thirdPersonCam.LookAt = _cameraFollowTarget;
+                topDownCam.Follow = _cameraFollowTarget;
+                topDownCam.LookAt = _cameraFollowTarget;
             }
         }
 

@@ -611,7 +611,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   _cameraFollowTarget: {fileID: 200000002}
-  thirdPersonCam: {fileID: 200000013}
+  topDownCam: {fileID: 200000013}
   _fireShakeSettings: {fileID: 0}
   _takeDamageShakeSettings: {fileID: 0}
   _aoeShakeSettings: {fileID: 0}

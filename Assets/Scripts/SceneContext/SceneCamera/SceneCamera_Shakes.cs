@@ -235,7 +235,7 @@ namespace VoidRogues
                 }
             }
 
-            SetNoiseParams(thirdPersonCam, dominantProfile, dominantFreq, totalAmplitude);
+            SetNoiseParams(topDownCam, dominantProfile, dominantFreq, totalAmplitude);
         }
 
         private void SetNoiseParams(CinemachineVirtualCamera vcam, NoiseSettings profile, float freqGain, float ampGain)
@@ -263,16 +263,16 @@ namespace VoidRogues
                     StopCoroutine(shake.routine);
             }
             _activeShakes.Clear();
-            SetNoiseParams(thirdPersonCam, null, 0f, 0f);
+            SetNoiseParams(topDownCam, null, 0f, 0f);
         }
 
         public void ResetAll()
         {
             StopAllShakes();
 
-            if (thirdPersonCam != null)
+            if (topDownCam != null)
             {
-                var noise = thirdPersonCam.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
+                var noise = topDownCam.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
                 if (noise != null)
                 {
                     noise.m_AmplitudeGain = 0f;
