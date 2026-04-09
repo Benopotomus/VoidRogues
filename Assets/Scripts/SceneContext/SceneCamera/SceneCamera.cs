@@ -76,11 +76,11 @@ namespace VoidRogues
                 firstPersonCam.Priority = firstPerson ? 20 : 10;
                 thirdPersonCam.Priority = firstPerson ? 10 : 20;
 
-                Debug.Log($"[CameraManager] Switched to {(firstPerson ? "First Person" : "Third Person")} view");
+                Debug.Log($"[SceneCamera] Switched to {(firstPerson ? "First Person" : "Third Person")} view");
             }
             else
             {
-                Debug.LogError("[CameraManager] One or both cameras not assigned!");
+                Debug.LogError("[SceneCamera] One or both cameras not assigned!");
             }
         }
 
