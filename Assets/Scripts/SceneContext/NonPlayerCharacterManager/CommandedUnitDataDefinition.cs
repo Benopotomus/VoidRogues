@@ -21,7 +21,7 @@ namespace VoidRogues
 
         // Config 
         private const int PLAYER_FOLLOW_BITS = 3;             // 0–8 22
-        private const int PLAYER_FOLLOW_SHIFT = DIALOG_INDEX_SHIFT + DIALOG_INDEX_BITS;
+        private const int PLAYER_FOLLOW_SHIFT = RESERVED_DIALOG_SHIFT + RESERVED_DIALOG_BITS;
         private const ushort PLAYER_FOLLOW_MASK = (1 << PLAYER_FOLLOW_BITS) - 1;
 
         private const int SQUAD_ID_BITS = 2;             // 0–4 24

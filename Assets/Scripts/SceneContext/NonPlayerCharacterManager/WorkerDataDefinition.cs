@@ -7,7 +7,7 @@ namespace VoidRogues
     {
         // Config (19 from base)
         private const int STRONGHOLD_ID_BITS = 4;                // 0–15
-        private const int STRONGHOLD_ID_SHIFT = DIALOG_INDEX_SHIFT + DIALOG_INDEX_BITS;
+        private const int STRONGHOLD_ID_SHIFT = RESERVED_DIALOG_SHIFT + RESERVED_DIALOG_BITS;
         private const byte STRONGHOLD_ID_MASK = (1 << STRONGHOLD_ID_BITS) - 1;
         private const int STRONGHOLD_ID_INVALID = STRONGHOLD_ID_MASK; // 15
 

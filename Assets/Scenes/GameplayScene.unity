@@ -1176,7 +1176,6 @@ MonoBehaviour:
     PlayerSpawnManager: {fileID: 1114471611}
     Camera: {fileID: 1553291050}
     NonPlayerCharacterManager: {fileID: 3000000000000001}
-    Pathfinding: {fileID: 4000000000000002}
     LocalPlayerCharacter: {fileID: 0}
     ObservedPlayerCharacter: {fileID: 0}
     GameplayMode: {fileID: 0}

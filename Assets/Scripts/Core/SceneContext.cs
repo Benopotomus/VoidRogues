@@ -6,7 +6,6 @@
 namespace VoidRogues
 {
     using Fusion;
-    using Pathfinding;
     using UnityEngine;
 
     [System.Serializable]
@@ -21,7 +20,6 @@ namespace VoidRogues
         public PlayerSpawnManager PlayerSpawnManager;
         public SceneCamera Camera;
         public NonPlayerCharacterManager NonPlayerCharacterManager;
-        public AstarPath Pathfinding;
         /*
         public ProjectileManager ProjectileManager;
         public PropManager PropManager;
@@ -33,7 +31,6 @@ namespace VoidRogues
         public LairManager LairManager;
         public InvasionManager InvasionManager;
         public ContainerManager ContainerManager;
-        public DialogManager DialogManager;
         public MissionManager MissionManager;
         public DebugConsole DebugConsole;
         public VisualEffectManager VFXManager;
@@ -66,7 +63,6 @@ namespace VoidRogues
         public LevelManager LevelManager;
         public PropManager PropManager;
         public CreatureManager CreatureManager;
-        public AstarPath Pathfinding;
         public HitManager HitManager;
 
 
@@ -103,7 +99,6 @@ namespace VoidRogues
     public enum ESceneContextCategory
     { 
         None,
-        DialogManager,
         MissionManager,
         NonPlayerCharacterManager,
         InvasionManager,

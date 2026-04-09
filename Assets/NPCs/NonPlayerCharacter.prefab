@@ -21,7 +21,6 @@ GameObject:
   - component: {fileID: 11400000000000008}
   - component: {fileID: 11400000000000009}
   - component: {fileID: 11400000000000010}
-  - component: {fileID: 11400000000000011}
   - component: {fileID: 11400000000000012}
   - component: {fileID: 11400000000000013}
   m_Layer: 0
@@ -90,7 +89,6 @@ MonoBehaviour:
   _attitude: {fileID: 11400000000000008}
   _weapons: {fileID: 11400000000000009}
   _carriedItem: {fileID: 11400000000000010}
-  _dialog: {fileID: 11400000000000011}
   _lifetime: {fileID: 11400000000000012}
   _meleeHitTracker: {fileID: 11400000000000013}
   _collider: {fileID: 13600000000000000}
@@ -231,18 +229,6 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1577b6093210db04fb8824ec588efa00, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
---- !u!114 &11400000000000011
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1000000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9b220dfb43e6419498344e2a7a8a8722, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
 --- !u!114 &11400000000000012

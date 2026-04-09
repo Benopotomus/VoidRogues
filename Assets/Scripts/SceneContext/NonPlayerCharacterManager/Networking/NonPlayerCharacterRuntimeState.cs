@@ -370,18 +370,6 @@ namespace VoidRogues
             }
         }
 
-        // Dialog
-
-        public int GetDialogIndex()
-        {
-            return DataDefinition.GetDialogIndex(ref _npcData);
-        }
-
-        public bool HasDialog()
-        {
-            return DataDefinition.HasDialog(ref _npcData);
-        }
-
         // Lifetime
 
         public int GetLifetimeProgress()
