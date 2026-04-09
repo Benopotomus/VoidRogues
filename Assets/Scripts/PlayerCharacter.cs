@@ -33,8 +33,8 @@ namespace VoidRogues
             if (GetInput(out GameInput input))
             {
                 // Convert 2D input (WASD / stick) to a 3D direction on the XZ plane.
-                // Input X  → World X   (strafe left/right)
-                // Input Y  → World Z   (forward/back)
+                // MoveDirection is a Vector2: X = left/right, Y = forward/back.
+                // Mapped to world XZ: Vector2.X → World X, Vector2.Y → World Z.
                 Vector3 moveDirection = new Vector3(input.MoveDirection.x, 0f, input.MoveDirection.y);
                 _kcc.SetInputDirection(moveDirection);
             }
