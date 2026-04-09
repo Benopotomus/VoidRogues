@@ -6,6 +6,7 @@
 namespace VoidRogues
 {
     using Fusion;
+    using Pathfinding;
     using UnityEngine;
 
     [System.Serializable]
@@ -20,6 +21,7 @@ namespace VoidRogues
         public PlayerSpawnManager PlayerSpawnManager;
         public SceneCamera Camera;
         public NonPlayerCharacterManager NonPlayerCharacterManager;
+        public AstarPath Pathfinding;
         /*
         public ProjectileManager ProjectileManager;
         public PropManager PropManager;
