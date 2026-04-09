@@ -7,15 +7,16 @@ namespace VoidRogues.NPCs
     /// <summary>
     /// Authoritative NPC simulation for VoidRogues.
     ///
-    /// Design (mirrors EnemyManager – see Architecture.md §3 for the pattern):
-    ///   - A single <see cref="NetworkBehaviour"/> owns all NPCs in the scene.
+    /// Design (LichLord NPC-replicator pattern, adapted for struct-driven networking):
+    ///   - A single <see cref="NetworkBehaviour"/> owns all NPC state in the scene.
     ///   - State lives in a fixed-size <see cref="NetworkArray{T}"/> of
     ///     <see cref="NPCState"/> structs (up to <see cref="MaxNPCs"/>).
     ///   - AI logic runs on the host only inside <see cref="FixedUpdateNetwork"/>.
-    ///   - Clients receive state deltas and update visual GameObjects in
-    ///     <see cref="Render"/>.
-    ///
-    /// Attach to the ManagerHub NetworkObject in the Mission scene.
+    ///   - Clients receive state deltas and update <see cref="NonPlayerCharacter"/>
+    ///     visual instances in <see cref="Render"/>.
+    ///   - Lives on the SceneContext GameObject (set in Inspector) rather than being
+    ///     dynamically spawned.  The <see cref="VoidRogues.GameFlow.SceneContext"/>
+    ///     holds a direct reference.
     /// </summary>
     public class NPCManager : NetworkBehaviour
     {
@@ -24,6 +25,10 @@ namespace VoidRogues.NPCs
         [Header("NPC Database")]
         [Tooltip("Index must match NPCState.TypeIndex.")]
         [SerializeField] private NPCDefinition[] _npcDatabase;
+
+        [Header("Prefab")]
+        [Tooltip("NonPlayerCharacter prefab instantiated for each active NPC slot.")]
+        [SerializeField] private NonPlayerCharacter _npcPrefab;
 
         // ------------------------------------------------------------------
         // Networked state
@@ -38,8 +43,11 @@ namespace VoidRogues.NPCs
 
         private ChangeDetector _changes;
 
-        private GameObject[] _visuals;
-        private Animator[]   _animators;
+        /// <summary>
+        /// Visual instances driven by <see cref="NPCState"/>.
+        /// Index matches the <see cref="_npcs"/> array.
+        /// </summary>
+        private NonPlayerCharacter[] _visuals;
 
         // Player positions cached per-tick for AI (host only).
         private readonly List<Vector2> _playerPositions = new List<Vector2>(4);
@@ -51,20 +59,14 @@ namespace VoidRogues.NPCs
         // Collider-to-index lookup populated each render frame.
         private readonly Dictionary<Collider2D, int> _colliderIndex = new Dictionary<Collider2D, int>();
 
-        // Colliders used for overlap checks on each NPC visual (local only).
-        private Collider2D[] _npcColliders;
-
         // ------------------------------------------------------------------
         // Lifecycle
         // ------------------------------------------------------------------
 
         public override void Spawned()
         {
-            _changes = GetChangeDetector(ChangeDetector.Source.SimulationState);
-
-            _visuals      = new GameObject[MaxNPCs];
-            _animators    = new Animator[MaxNPCs];
-            _npcColliders = new Collider2D[MaxNPCs];
+            _changes      = GetChangeDetector(ChangeDetector.Source.SimulationState);
+            _visuals      = new NonPlayerCharacter[MaxNPCs];
             _spawnOrigins = new Vector2[MaxNPCs];
         }
 
@@ -119,20 +121,14 @@ namespace VoidRogues.NPCs
                 if (state.IsActive)
                 {
                     EnsureVisual(i, state.TypeIndex);
-                    var go = _visuals[i];
-                    if (go != null)
+                    var npc = _visuals[i];
+                    if (npc != null)
                     {
-                        go.SetActive(true);
-                        go.transform.position = state.Position;
-
-                        // Update animator state.
-                        if (_animators[i] != null)
-                        {
-                            _animators[i].SetInteger("State", state.AnimState);
-                        }
+                        npc.gameObject.SetActive(true);
+                        npc.ApplyState(state);
 
                         // Register collider for interaction lookup.
-                        var col = _npcColliders[i];
+                        var col = npc.GetCollider();
                         if (col != null)
                         {
                             _colliderIndex[col] = i;
@@ -141,7 +137,7 @@ namespace VoidRogues.NPCs
                 }
                 else if (_visuals[i] != null)
                 {
-                    _visuals[i].SetActive(false);
+                    _visuals[i].Deactivate();
                 }
             }
         }
@@ -152,18 +148,29 @@ namespace VoidRogues.NPCs
             if (typeIndex >= _npcDatabase.Length) return;
 
             var def = _npcDatabase[typeIndex];
-            if (def.VisualPrefab == null) return;
 
-            var go = Instantiate(def.VisualPrefab);
-            _visuals[index] = go;
+            // Use the explicit NonPlayerCharacter prefab if set, otherwise fall back
+            // to the definition's VisualPrefab.
+            NonPlayerCharacter npc = null;
 
-            _animators[index] = go.GetComponent<Animator>();
-            if (_animators[index] != null && def.AnimatorController != null)
+            if (_npcPrefab != null)
             {
-                _animators[index].runtimeAnimatorController = def.AnimatorController;
+                npc = Instantiate(_npcPrefab);
+            }
+            else if (def.VisualPrefab != null)
+            {
+                var go = Instantiate(def.VisualPrefab);
+                npc = go.GetComponent<NonPlayerCharacter>();
+                if (npc == null)
+                {
+                    npc = go.AddComponent<NonPlayerCharacter>();
+                }
             }
 
-            _npcColliders[index] = go.GetComponent<Collider2D>();
+            if (npc == null) return;
+
+            npc.Initialise(index, def);
+            _visuals[index] = npc;
         }
 
         // ------------------------------------------------------------------
@@ -233,6 +240,16 @@ namespace VoidRogues.NPCs
             return _npcs[index];
         }
 
+        /// <summary>
+        /// Returns the <see cref="NonPlayerCharacter"/> visual for the given slot,
+        /// or null if no visual has been created yet.
+        /// </summary>
+        public NonPlayerCharacter GetNPCVisual(int index)
+        {
+            if (index < 0 || index >= MaxNPCs) return null;
+            return _visuals != null ? _visuals[index] : null;
+        }
+
         /// <summary>Number of currently active NPCs.</summary>
         public int ActiveNPCCount
         {
@@ -246,5 +263,8 @@ namespace VoidRogues.NPCs
                 return count;
             }
         }
+
+        /// <summary>The NPC definitions database (read-only).</summary>
+        public NPCDefinition[] NPCDatabase => _npcDatabase;
     }
 }
