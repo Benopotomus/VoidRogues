@@ -1,4 +1,4 @@
-// using Pathfinding; // TODO: Port A* Pathfinding integration from LichLord
+using Pathfinding;
 using UnityEngine;
 
 namespace VoidRogues
@@ -8,9 +8,8 @@ namespace VoidRogues
         [SerializeField] private NonPlayerCharacter _npc;
         public NonPlayerCharacter NPC => _npc;
 
-        // TODO: Port FollowerEntity (A* Pathfinding) from LichLord
-        // [SerializeField] private FollowerEntity _follower;
-        // public FollowerEntity AIFollower => _follower;
+        [SerializeField] private FollowerEntity _follower;
+        public FollowerEntity AIFollower => _follower;
 
         [SerializeField] private Vector3 _worldVelocity;
         public Vector3 WorldVelocity => _worldVelocity;
@@ -102,31 +101,34 @@ namespace VoidRogues
         public void SetFollowerUpdatePosition(bool newEnabled)
         {
             _followerUpdatePosition = newEnabled;
-            // TODO: Port FollowerEntity integration from LichLord
+            if (_follower != null)
+                _follower.updatePosition = newEnabled;
         }
 
         public void SetFollowerUpdateRotation(bool newEnabled)
         {
             _followerUpdateRotation = newEnabled;
-            // TODO: Port FollowerEntity integration from LichLord
+            if (_follower != null)
+                _follower.updateRotation = newEnabled;
         }
 
         public void SetFollowerCanMove(bool newCanMove)
         {
             _followerCanMove = newCanMove;
-            // TODO: Port FollowerEntity integration from LichLord
+            if (_follower != null)
+                _follower.canMove = newCanMove;
         }
 
         public void SetFollowerLocalAvoidance(bool newEnabled)
         {
             _followerLocalAvoidance = newEnabled;
-            // TODO: Port FollowerEntity integration from LichLord
         }
 
         public void SetFollowerMaxSpeed(float newSpeed)
         {
             _followerMaxSpeed = newSpeed;
-            // TODO: Port FollowerEntity integration from LichLord
+            if (_follower != null)
+                _follower.maxSpeed = newSpeed;
         }
 
         private Vector3 _moveTarget;
@@ -137,7 +139,8 @@ namespace VoidRogues
                 return;
 
             _moveTarget = newMoveTarget;
-            // TODO: Port FollowerEntity destination from LichLord
+            if (_follower != null)
+                _follower.destination = newMoveTarget;
         }
 
         public void StartRecycle()

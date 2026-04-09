@@ -15,7 +15,6 @@ namespace VoidRogues
         public ManeuverTable ManeuverTable;
         public InvasionTable InvasionTable;
         public CurrencyTable CurrencyTable;
-        public DialogTable DialogTable;
         public ItemTable ItemTable;
 
         public ItemTable ItemTable;

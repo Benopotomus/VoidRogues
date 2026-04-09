@@ -4,7 +4,6 @@ namespace VoidRogues
 {
     public class NonPlayerCharacterDataDefinition : ScriptableObject
     {
-        private const int INVALID_DIALOG_INDEX = DIALOG_INDEX_MASK; // Reserve max value as invalid
 
         // Config
         protected const int DEFINITION_BITS = 8;          // 0–255
@@ -19,9 +18,8 @@ namespace VoidRogues
         protected const int TEAM_SHIFT = SPAWN_TYPE_SHIFT + SPAWN_TYPE_BITS;
         protected const byte TEAM_MASK = (1 << TEAM_BITS) - 1;
 
-        protected const int DIALOG_INDEX_BITS = 5;        // 0-31
-        protected const int DIALOG_INDEX_SHIFT = TEAM_SHIFT + TEAM_BITS;
-        protected const ushort DIALOG_INDEX_MASK = (1 << DIALOG_INDEX_BITS) - 1;
+        private const int RESERVED_DIALOG_BITS = 5;        // reserved, previously dialog index
+        protected const int RESERVED_DIALOG_SHIFT = TEAM_SHIFT + TEAM_BITS;
         // 19 total
 
         // Condition (byte)
@@ -53,7 +51,6 @@ namespace VoidRogues
             SetDefinitionID(definition.TableID, ref npcData);
             SetSpawnType(spawnType, ref npcData);
             SetTeamID(teamID, ref npcData);
-            SetDialogIndex(-1, ref npcData);
 
             // Initialize Condition
             npcData.Condition = 0;
@@ -106,34 +103,6 @@ namespace VoidRogues
             int teamValue = Mathf.Clamp((int)teamID, 0, TEAM_MASK);
             config = (ushort)((config & ~(TEAM_MASK << TEAM_SHIFT)) | (teamValue << TEAM_SHIFT));
             npcData.Configuration = config;
-        }
-
-        // Dialog
-        public virtual int GetDialogIndex(ref FNonPlayerCharacterData npcData)
-        {
-            int index = (npcData.Configuration >> DIALOG_INDEX_SHIFT) & DIALOG_INDEX_MASK;
-            if (index == INVALID_DIALOG_INDEX)
-                return -1; // Use -1 as "no dialog"
-            return index;
-        }
-
-        public virtual void SetDialogIndex(int newDialogIndex, ref FNonPlayerCharacterData npcData)
-        {
-            int config = npcData.Configuration;
-            int dialogIndex;
-
-            if (newDialogIndex < 0)
-                dialogIndex = INVALID_DIALOG_INDEX; // store invalid for "no dialog"
-            else
-                dialogIndex = Mathf.Clamp(newDialogIndex, 0, DIALOG_INDEX_MASK - 1);
-
-            config = (config & ~(DIALOG_INDEX_MASK << DIALOG_INDEX_SHIFT)) | (dialogIndex << DIALOG_INDEX_SHIFT);
-            npcData.Configuration = config;
-        }
-
-        public virtual bool HasDialog(ref FNonPlayerCharacterData npcData)
-        {
-            return (GetDialogIndex(ref npcData) > -1);
         }
 
         // NPCState

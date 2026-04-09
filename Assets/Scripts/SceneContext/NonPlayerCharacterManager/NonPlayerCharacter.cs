@@ -55,9 +55,6 @@ namespace VoidRogues
         [SerializeField] private NonPlayerCharacterCarriedItemComponent _carriedItem;
         public NonPlayerCharacterCarriedItemComponent CarriedItem => _carriedItem;
 
-        [SerializeField] private NonPlayerCharacterDialogComponent _dialog;
-        public NonPlayerCharacterDialogComponent Dialog => _dialog;
-
         [SerializeField] private NonPlayerCharacterLifetimeComponent _lifetime;
         public NonPlayerCharacterLifetimeComponent Lifetime => _lifetime;
 

@@ -10,7 +10,7 @@ namespace VoidRogues
 
         // Config 
         private const int FORMATION_BITS = 4;             // 0–15
-        private const int FORMATION_SHIFT = DIALOG_INDEX_SHIFT + DIALOG_INDEX_BITS;
+        private const int FORMATION_SHIFT = RESERVED_DIALOG_SHIFT + RESERVED_DIALOG_BITS;
         private const ushort FORMATION_MASK = (1 << FORMATION_BITS) - 1;
 
         // Events
