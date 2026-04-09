@@ -12,7 +12,7 @@ namespace VoidRogues
         /// <summary>Raw 2D stick / WASD vector (not normalized).</summary>
         public Vector2 MoveDirection;
 
-        /// <summary>Aim / look direction (screen-space pointer or right-stick).</summary>
+        /// <summary>Aim / look target (world-space pointer position or right-stick direction).</summary>
         public Vector2 LookDirection;
 
         /// <summary>Packed button states.</summary>
@@ -32,6 +32,5 @@ namespace VoidRogues
         SkillZero  = 4,
         SkillOne   = 5,
         SwapWeapon = 6,
-        Jump       = 7,
     }
 }
