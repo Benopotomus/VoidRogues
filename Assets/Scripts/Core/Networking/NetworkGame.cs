@@ -76,13 +76,6 @@ namespace VoidRogues
             Runner.RemoveCallbacks(_fusionCallbacks);
             Runner.AddCallbacks(_fusionCallbacks);
 
-            // Register the local input provider with the runner so Fusion
-            // receives GameInput each tick.
-            if (PlayerInput.Instance != null)
-            {
-                PlayerInput.Instance.SetRunner(Runner);
-            }
-
             ActivePlayers.Clear();
             ActivePlayerCount = 0;
         }

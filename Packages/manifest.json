@@ -6,9 +6,17 @@
       "scopes": [
         "com.arongranberg.astar"
       ]
+    },
+    {
+      "name": "Photon Engine",
+      "url": "https://package.photon.io",
+      "scopes": [
+        "com.photon"
+      ]
     }
   ],
   "dependencies": {
+    "com.photon.fusion.addon.kcc": "2.0.12",
     "com.arongranberg.astar": "5.4.6",
     "com.demigiant.dotween": "https://github.com/O-S-K/DOTween.git#fed9a73bfed474fbb1d1f3182e1d725b1b16042f",
     "com.dicewrenchdesigns.dwdanimationcurveasset": "https://github.com/dicewrench/DWD.Toolkit.AnimationCurveAsset.git",

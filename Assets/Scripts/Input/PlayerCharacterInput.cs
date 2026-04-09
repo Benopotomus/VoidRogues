@@ -10,45 +10,42 @@ namespace VoidRogues
     /// Reads local input from <see cref="InputManager"/> every Unity frame and
     /// feeds a <see cref="GameInput"/> struct into Fusion's input pipeline via
     /// <see cref="INetworkRunnerCallbacks.OnInput"/>.
-    /// 
-    /// Attach this component to any persistent GameObject in the gameplay scene
-    /// (e.g. the same object as NetworkGame) and call <see cref="SetRunner"/>
-    /// once the <see cref="NetworkRunner"/> is available.
+    ///
+    /// Lives on the <see cref="PlayerEntity"/> prefab (follows the HeroInput / HeroEntity pattern).
+    /// Registers itself with the runner only when it has input authority (i.e. the local player).
     /// </summary>
     [DefaultExecutionOrder(-15)] // After InputManager (-20)
-    public sealed class PlayerInput : MonoBehaviour, INetworkRunnerCallbacks
+    public sealed class PlayerCharacterInput : NetworkBehaviour, INetworkRunnerCallbacks
     {
-        // SINGLETON
-        public static PlayerInput Instance { get; private set; }
-
         // PRIVATE STATE
-        private NetworkRunner _runner;
         private GameInput _accumulatedInput;
+        private bool _registered;
 
-        // LIFECYCLE
+        // NetworkBehaviour INTERFACE
 
-        private void Awake()
+        public override void Spawned()
         {
-            if (Instance != null && Instance != this)
+            if (HasInputAuthority)
             {
-                Destroy(gameObject);
-                return;
+                Runner.AddCallbacks(this);
+                _registered = true;
             }
-
-            Instance = this;
         }
 
-        private void OnDestroy()
+        public override void Despawned(NetworkRunner runner, bool hasState)
         {
-            DetachRunner();
-
-            if (Instance == this)
-                Instance = null;
+            if (_registered)
+            {
+                runner.RemoveCallbacks(this);
+                _registered = false;
+            }
         }
+
+        // MONOBEHAVIOUR
 
         private void Update()
         {
-            if (_runner == null)
+            if (!_registered)
                 return;
 
             var manager = InputManager.instance;
@@ -73,32 +70,12 @@ namespace VoidRogues
             _accumulatedInput.Buttons = buttons;
         }
 
-        // PUBLIC API
-
-        /// <summary>
-        /// Register this provider with a <see cref="NetworkRunner"/>.
-        /// Call once after the runner starts (e.g. in NetworkGame.Initialize).
-        /// </summary>
-        public void SetRunner(NetworkRunner runner)
+        private void OnDestroy()
         {
-            DetachRunner();
-
-            if (runner == null)
-                return;
-
-            _runner = runner;
-            _runner.AddCallbacks(this);
-        }
-
-        /// <summary>
-        /// Unregister from the current runner.
-        /// </summary>
-        public void DetachRunner()
-        {
-            if (_runner != null)
+            if (_registered && Runner != null)
             {
-                _runner.RemoveCallbacks(this);
-                _runner = null;
+                Runner.RemoveCallbacks(this);
+                _registered = false;
             }
         }
 

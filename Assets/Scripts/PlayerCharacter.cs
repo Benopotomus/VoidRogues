@@ -1,25 +1,26 @@
 namespace VoidRogues
 {
     using Fusion;
+    using Fusion.Addons.KCC;
     using UnityEngine;
 
     /// <summary>
     /// Networked player character that reads <see cref="GameInput"/> from
-    /// Fusion's input pipeline and drives a <see cref="NetworkCharacterController"/>
+    /// Fusion's input pipeline and drives a <see cref="KCC"/>
     /// on the XZ plane (3D movement with gravity).
     /// </summary>
-    [RequireComponent(typeof(NetworkCharacterController))]
+    [RequireComponent(typeof(KCC))]
     public class PlayerCharacter : ContextBehaviour
     {
         // PRIVATE MEMBERS
 
-        private NetworkCharacterController _cc;
+        private KCC _kcc;
 
         // NetworkBehaviour INTERFACE
 
         public override void Spawned()
         {
-            _cc = GetComponent<NetworkCharacterController>();
+            _kcc = GetComponent<KCC>();
 
             if (HasInputAuthority && Context != null)
             {
@@ -35,12 +36,7 @@ namespace VoidRogues
                 // Input X  → World X   (strafe left/right)
                 // Input Y  → World Z   (forward/back)
                 Vector3 moveDirection = new Vector3(input.MoveDirection.x, 0f, input.MoveDirection.y);
-                _cc.Move(moveDirection);
-            }
-            else
-            {
-                // No input available (proxy / no authority) – still apply gravity.
-                _cc.Move(default);
+                _kcc.SetInputDirection(moveDirection);
             }
         }
     }
