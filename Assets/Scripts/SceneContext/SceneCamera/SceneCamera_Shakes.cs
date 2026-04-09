@@ -15,7 +15,6 @@ namespace VoidRogues
         [SerializeField] private NoiseSettings _fireShakeSettings;
         [SerializeField] private NoiseSettings _takeDamageShakeSettings;
         [SerializeField] private NoiseSettings _aoeShakeSettings;
-        // Add more profiles here as needed
 
         [Header("Default Shake Values (fallback when params are -1)")]
         [SerializeField] private float _defaultShakeDuration = 0.35f;
@@ -171,14 +170,13 @@ namespace VoidRogues
         {
             float elapsed = 0f;
 
-            // Better timing: total duration = fadeIn + sustain + fadeOut, but clamp to requested duration
             float requestedTotal = p.duration;
             float idealTotal = p.fadeInTime + p.sustainTime + p.fadeOutTime;
             float scale = (idealTotal > 0f && requestedTotal > 0f) ? requestedTotal / idealTotal : 1f;
 
             float fadeInEnd = p.fadeInTime * scale;
             float sustainEnd = fadeInEnd + (p.sustainTime * scale);
-            float totalEnd = requestedTotal;  // respect the caller's duration
+            float totalEnd = requestedTotal;
 
             // Phase 1: Fade IN
             while (elapsed < fadeInEnd)
@@ -237,13 +235,7 @@ namespace VoidRogues
                 }
             }
 
-            SetNoiseParamsOnBoth(totalAmplitude, dominantProfile, dominantFreq);
-        }
-
-        private void SetNoiseParamsOnBoth(float amplitudeGain, NoiseSettings profile, float frequencyGain)
-        {
-            SetNoiseParams(thirdPersonCam, profile, frequencyGain, amplitudeGain);
-            SetNoiseParams(firstPersonCam, profile, frequencyGain, amplitudeGain);
+            SetNoiseParams(topDownCam, dominantProfile, dominantFreq, totalAmplitude);
         }
 
         private void SetNoiseParams(CinemachineVirtualCamera vcam, NoiseSettings profile, float freqGain, float ampGain)
@@ -271,26 +263,16 @@ namespace VoidRogues
                     StopCoroutine(shake.routine);
             }
             _activeShakes.Clear();
-            SetNoiseParamsOnBoth(0f, null, 0f);
+            SetNoiseParams(topDownCam, null, 0f, 0f);
         }
 
         public void ResetAll()
         {
             StopAllShakes();
 
-            if (thirdPersonCam != null)
+            if (topDownCam != null)
             {
-                var noise = thirdPersonCam.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
-                if (noise != null)
-                {
-                    noise.m_AmplitudeGain = 0f;
-                    noise.m_FrequencyGain = 0f;
-                }
-            }
-
-            if (firstPersonCam != null)
-            {
-                var noise = firstPersonCam.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
+                var noise = topDownCam.GetCinemachineComponent<CinemachineBasicMultiChannelPerlin>();
                 if (noise != null)
                 {
                     noise.m_AmplitudeGain = 0f;
