@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VoidRogues.NPCs
+namespace VoidRogues
 {
     /// <summary>
     /// ScriptableObject that defines a single NPC type's statistics and assets.
@@ -27,11 +27,11 @@ namespace VoidRogues.NPCs
         public float InteractionRange = 1.5f;
 
         [Header("Collision")]
-        [Tooltip("Radius used for Physics2D overlap checks in NPCManager.")]
+        [Tooltip("Radius used for Physics2D overlap checks in NonPlayerCharacterManager.")]
         public float ColliderRadius = 0.3f;
 
         [Header("Visuals")]
-        [Tooltip("The non-networked visual prefab spawned by NPCManager on all clients.")]
+        [Tooltip("The non-networked visual prefab spawned by NonPlayerCharacterManager on all clients.")]
         public GameObject VisualPrefab;
         public RuntimeAnimatorController AnimatorController;
     }

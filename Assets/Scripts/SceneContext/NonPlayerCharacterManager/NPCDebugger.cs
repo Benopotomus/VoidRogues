@@ -1,16 +1,17 @@
 using UnityEngine;
 
-namespace VoidRogues.NPCs
+namespace VoidRogues
 {
     /// <summary>
     /// Runtime debugger for the NPC system.
     ///
     /// Draws an on-screen overlay showing active NPC count, per-NPC state, and
-    /// gizmos in the Scene view. Attach to the SceneContext GameObject or a child.
+    /// gizmos in the Scene view. Attach alongside
+    /// <see cref="NonPlayerCharacterManager"/> on the SceneContext hierarchy.
     ///
-    /// Toggled at runtime via <see cref="ToggleKey"/> (default: F9).
+    /// Toggled at runtime via <see cref="_toggleKey"/> (default: F9).
     /// </summary>
-    public class NPCDebugger : MonoBehaviour
+    public class NPCDebugger : CoreBehaviour
     {
         [Header("Settings")]
         [Tooltip("Key to toggle the debug overlay at runtime.")]
@@ -26,8 +27,8 @@ namespace VoidRogues.NPCs
         [SerializeField] private Color _wanderTargetColor = Color.yellow;
 
         [Header("References")]
-        [Tooltip("NPCManager to debug. Auto-resolves from SceneContext if null.")]
-        [SerializeField] private NPCManager _npcManager;
+        [Tooltip("NonPlayerCharacterManager to debug. Auto-resolves from sibling/parent if null.")]
+        [SerializeField] private NonPlayerCharacterManager _manager;
 
         private bool _showOverlay;
 
@@ -46,13 +47,15 @@ namespace VoidRogues.NPCs
             }
         }
 
-        private NPCManager ResolveManager()
+        private NonPlayerCharacterManager ResolveManager()
         {
-            if (_npcManager != null) return _npcManager;
-
-            var ctx = VoidRogues.GameFlow.SceneContext.Instance;
-            if (ctx != null) _npcManager = ctx.NPCManager;
-            return _npcManager;
+            if (_manager != null) return _manager;
+            _manager = GetComponentInParent<NonPlayerCharacterManager>();
+            if (_manager == null)
+            {
+                _manager = GetComponentInChildren<NonPlayerCharacterManager>();
+            }
+            return _manager;
         }
 
         // ------------------------------------------------------------------
@@ -66,22 +69,22 @@ namespace VoidRogues.NPCs
             var manager = ResolveManager();
             if (manager == null)
             {
-                GUI.Label(new Rect(10, 10, 300, 30), "<b>[NPCDebugger]</b> No NPCManager found.");
+                GUI.Label(new Rect(10, 10, 400, 30), "<b>[NPCDebugger]</b> No NonPlayerCharacterManager found.");
                 return;
             }
 
-            float panelWidth  = 400f;
+            float panelWidth  = 420f;
             float panelHeight = 500f;
 
             GUILayout.BeginArea(new Rect(10, 10, panelWidth, panelHeight), GUI.skin.box);
 
             GUILayout.Label($"<b>NPC Debugger</b>  (toggle: {_toggleKey})");
-            GUILayout.Label($"Active NPCs: <b>{manager.ActiveNPCCount}</b> / {NPCManager.MaxNPCs}");
+            GUILayout.Label($"Active NPCs: <b>{manager.ActiveNPCCount}</b> / {NonPlayerCharacterManager.MaxNPCs}");
             GUILayout.Space(4);
 
             _scrollPos = GUILayout.BeginScrollView(_scrollPos, GUILayout.Height(panelHeight - 80));
 
-            for (int i = 0; i < NPCManager.MaxNPCs; i++)
+            for (int i = 0; i < NonPlayerCharacterManager.MaxNPCs; i++)
             {
                 var state = manager.GetNPCState(i);
                 if (!state.IsActive) continue;
@@ -127,7 +130,7 @@ namespace VoidRogues.NPCs
             var manager = ResolveManager();
             if (manager == null) return;
 
-            for (int i = 0; i < NPCManager.MaxNPCs; i++)
+            for (int i = 0; i < NonPlayerCharacterManager.MaxNPCs; i++)
             {
                 var state = manager.GetNPCState(i);
                 if (!state.IsActive) continue;
@@ -144,8 +147,6 @@ namespace VoidRogues.NPCs
                 Gizmos.DrawLine(pos, wanderPos);
                 Gizmos.DrawWireSphere(wanderPos, 0.1f);
 
-                // Slot index label (Scene view only, using Handles is not available
-                // in builds – this is handled by OnDrawGizmos which only runs in editor).
 #if UNITY_EDITOR
                 UnityEditor.Handles.Label(pos + Vector3.up * 0.4f, $"NPC[{i}]");
 #endif

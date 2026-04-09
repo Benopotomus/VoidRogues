@@ -1,25 +1,25 @@
 using UnityEngine;
 
-namespace VoidRogues.NPCs
+namespace VoidRogues
 {
     /// <summary>
     /// Visual representation of a single NPC in the scene.
     ///
     /// Following the LichLord <c>NonPlayerCharacter</c> pattern, this is a local-only
     /// <see cref="MonoBehaviour"/> (no <see cref="Fusion.NetworkObject"/>).
-    /// The <see cref="NPCManager"/> creates one instance per active NPC slot and
-    /// drives its state every render frame from the corresponding
+    /// The <see cref="NonPlayerCharacterManager"/> creates one instance per active NPC slot
+    /// and drives its state every render frame from the corresponding
     /// <see cref="NPCState"/> struct.
     ///
     /// Responsibilities:
     ///   - Holds a <see cref="Collider2D"/> for player-interaction raycasts.
     ///   - Drives the <see cref="Animator"/> based on <see cref="NPCState.AnimState"/>.
     ///   - Shows/hides the interaction prompt UI element.
-    ///   - Provides an <see cref="SlotIndex"/> so external systems (e.g. the player
-    ///     interaction controller) can resolve which NPC a collider belongs to.
+    ///   - Provides a <see cref="SlotIndex"/> so external systems can resolve which
+    ///     NPC a collider belongs to.
     /// </summary>
     [RequireComponent(typeof(Collider2D))]
-    public class NonPlayerCharacter : MonoBehaviour
+    public class NonPlayerCharacter : CoreBehaviour
     {
         // ------------------------------------------------------------------
         // Inspector
@@ -38,8 +38,8 @@ namespace VoidRogues.NPCs
         // ------------------------------------------------------------------
 
         /// <summary>
-        /// Index into <see cref="NPCManager._npcs"/> array.
-        /// Set by <see cref="NPCManager"/> when the visual is created.
+        /// Index into <see cref="NonPlayerCharacterManager._npcs"/> array.
+        /// Set when the visual is created.
         /// </summary>
         public int SlotIndex { get; private set; } = -1;
 
@@ -56,12 +56,11 @@ namespace VoidRogues.NPCs
         private int  _lastInteractingPlayer = -2; // sentinel
 
         // ------------------------------------------------------------------
-        // API – called by NPCManager
+        // API – called by NonPlayerCharacterManager
         // ------------------------------------------------------------------
 
         /// <summary>
         /// Initialises the <see cref="NonPlayerCharacter"/> after instantiation.
-        /// Called once by <see cref="NPCManager.EnsureVisual"/>.
         /// </summary>
         public void Initialise(int slotIndex, NPCDefinition definition)
         {
@@ -86,7 +85,7 @@ namespace VoidRogues.NPCs
 
         /// <summary>
         /// Applies the replicated <see cref="NPCState"/> to the local visual.
-        /// Called each render frame by <see cref="NPCManager"/>.
+        /// Called each render frame by <see cref="NonPlayerCharacterManager"/>.
         /// </summary>
         public void ApplyState(NPCState state)
         {
@@ -132,7 +131,7 @@ namespace VoidRogues.NPCs
 
         /// <summary>
         /// Hides the visual and resets cached state.
-        /// Called by <see cref="NPCManager"/> when the NPC slot is deactivated.
+        /// Called when the NPC slot is deactivated.
         /// </summary>
         public void Deactivate()
         {

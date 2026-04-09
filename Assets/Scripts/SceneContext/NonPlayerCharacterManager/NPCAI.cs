@@ -2,10 +2,10 @@ using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
 
-namespace VoidRogues.NPCs
+namespace VoidRogues
 {
     /// <summary>
-    /// Stateless AI helper called by <see cref="NPCManager"/> each simulation tick
+    /// Stateless AI helper called by <see cref="NonPlayerCharacterManager"/> each simulation tick
     /// on the host.
     ///
     /// Each NPC:

@@ -1,12 +1,12 @@
 using Fusion;
 using UnityEngine;
 
-namespace VoidRogues.NPCs
+namespace VoidRogues
 {
     /// <summary>
     /// Blittable struct for a single NPC's networked state.
     ///
-    /// Stored in <see cref="NPCManager._npcs"/> (a <see cref="NetworkArray{T}"/>).
+    /// Stored in <see cref="NonPlayerCharacterManager._npcs"/> (a <see cref="NetworkArray{T}"/>).
     /// The host writes this struct every tick; clients read it via <see cref="ChangeDetector"/>.
     /// </summary>
     public struct NPCState : INetworkStruct
@@ -20,7 +20,7 @@ namespace VoidRogues.NPCs
         /// <summary>Current velocity (units/second).</summary>
         public Vector2 Velocity;
 
-        /// <summary>Index into <see cref="NPCManager._npcDatabase"/>.</summary>
+        /// <summary>Index into <see cref="NonPlayerCharacterManager._npcDatabase"/>.</summary>
         public byte TypeIndex;
 
         /// <summary>

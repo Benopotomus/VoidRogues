@@ -2,23 +2,22 @@ using System.Collections.Generic;
 using Fusion;
 using UnityEngine;
 
-namespace VoidRogues.NPCs
+namespace VoidRogues
 {
     /// <summary>
     /// Authoritative NPC simulation for VoidRogues.
     ///
     /// Design (LichLord NPC-replicator pattern, adapted for struct-driven networking):
-    ///   - A single <see cref="NetworkBehaviour"/> owns all NPC state in the scene.
+    ///   - A single <see cref="ContextBehaviour"/> owns all NPC state in the scene.
     ///   - State lives in a fixed-size <see cref="NetworkArray{T}"/> of
     ///     <see cref="NPCState"/> structs (up to <see cref="MaxNPCs"/>).
     ///   - AI logic runs on the host only inside <see cref="FixedUpdateNetwork"/>.
     ///   - Clients receive state deltas and update <see cref="NonPlayerCharacter"/>
     ///     visual instances in <see cref="Render"/>.
-    ///   - Lives on the SceneContext GameObject (set in Inspector) rather than being
-    ///     dynamically spawned.  The <see cref="VoidRogues.GameFlow.SceneContext"/>
-    ///     holds a direct reference.
+    ///   - Lives on the GameplayScene / SceneContext hierarchy.
+    ///     <see cref="SceneContext.NonPlayerCharacterManager"/> holds the direct reference.
     /// </summary>
-    public class NPCManager : NetworkBehaviour
+    public class NonPlayerCharacterManager : ContextBehaviour
     {
         public const int MaxNPCs = 512;
 
@@ -29,6 +28,10 @@ namespace VoidRogues.NPCs
         [Header("Prefab")]
         [Tooltip("NonPlayerCharacter prefab instantiated for each active NPC slot.")]
         [SerializeField] private NonPlayerCharacter _npcPrefab;
+
+        [Header("Spawn Configuration")]
+        [Tooltip("NPCs to spawn when the scene starts.")]
+        [SerializeField] private NPCSpawnPoint[] _spawnPoints;
 
         // ------------------------------------------------------------------
         // Networked state
@@ -59,6 +62,8 @@ namespace VoidRogues.NPCs
         // Collider-to-index lookup populated each render frame.
         private readonly Dictionary<Collider2D, int> _colliderIndex = new Dictionary<Collider2D, int>();
 
+        private bool _hasSpawned;
+
         // ------------------------------------------------------------------
         // Lifecycle
         // ------------------------------------------------------------------
@@ -68,6 +73,12 @@ namespace VoidRogues.NPCs
             _changes      = GetChangeDetector(ChangeDetector.Source.SimulationState);
             _visuals      = new NonPlayerCharacter[MaxNPCs];
             _spawnOrigins = new Vector2[MaxNPCs];
+
+            // Auto-spawn configured NPCs on the host.
+            if (Runner.IsServer)
+            {
+                SpawnConfiguredNPCs();
+            }
         }
 
         // ------------------------------------------------------------------
@@ -149,8 +160,6 @@ namespace VoidRogues.NPCs
 
             var def = _npcDatabase[typeIndex];
 
-            // Use the explicit NonPlayerCharacter prefab if set, otherwise fall back
-            // to the definition's VisualPrefab.
             NonPlayerCharacter npc = null;
 
             if (_npcPrefab != null)
@@ -174,8 +183,28 @@ namespace VoidRogues.NPCs
         }
 
         // ------------------------------------------------------------------
-        // Public API
+        // Spawn API
         // ------------------------------------------------------------------
+
+        /// <summary>
+        /// Spawns all NPCs defined in <see cref="_spawnPoints"/>.
+        /// Safe to call multiple times – only the first invocation has an effect.
+        /// Called automatically from <see cref="Spawned"/> on the host.
+        /// </summary>
+        public void SpawnConfiguredNPCs()
+        {
+            if (_hasSpawned) return;
+            _hasSpawned = true;
+
+            if (_spawnPoints == null || _spawnPoints.Length == 0) return;
+
+            foreach (var sp in _spawnPoints)
+            {
+                ActivateNPC(sp.TypeIndex, sp.Position);
+            }
+
+            Debug.Log($"[NonPlayerCharacterManager] Spawned {_spawnPoints.Length} NPC(s).");
+        }
 
         /// <summary>
         /// Activates an NPC slot. Must be called on the host.
@@ -205,7 +234,7 @@ namespace VoidRogues.NPCs
                 return;
             }
 
-            Debug.LogWarning("[NPCManager] All NPC slots are occupied.");
+            Debug.LogWarning("[NonPlayerCharacterManager] All NPC slots are occupied.");
         }
 
         /// <summary>
@@ -222,6 +251,10 @@ namespace VoidRogues.NPCs
             state.IsActive = false;
             _npcs.Set(index, state);
         }
+
+        // ------------------------------------------------------------------
+        // Query API
+        // ------------------------------------------------------------------
 
         /// <summary>
         /// Returns the array index for an NPC that owns the given collider, or -1.
@@ -266,5 +299,18 @@ namespace VoidRogues.NPCs
 
         /// <summary>The NPC definitions database (read-only).</summary>
         public NPCDefinition[] NPCDatabase => _npcDatabase;
+    }
+
+    /// <summary>
+    /// Inspector-configurable NPC spawn point.
+    /// </summary>
+    [System.Serializable]
+    public class NPCSpawnPoint
+    {
+        [Tooltip("Index into NonPlayerCharacterManager's NPC database.")]
+        public byte TypeIndex;
+
+        [Tooltip("World-space position where the NPC will be placed.")]
+        public Vector2 Position;
     }
 }
