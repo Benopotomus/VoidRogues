@@ -19,12 +19,12 @@ namespace VoidRogues
         public NetworkGame NetworkGame;
         public PlayerSpawnManager PlayerSpawnManager;
         public SceneCamera Camera;
+        public NonPlayerCharacterManager NonPlayerCharacterManager;
         /*
         public ProjectileManager ProjectileManager;
         public PropManager PropManager;
         public WorldSaveLoadManager WorldSaveLoadManager;
         public PlayerSaveLoadManager PlayerSaveLoadManager;
-        public NonPlayerCharacterManager NonPlayerCharacterManager;
         public WorldManager WorldManager;
         public ChunkManager ChunkManager;
         public SceneUI UI;
