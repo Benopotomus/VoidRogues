@@ -1,316 +1,229 @@
-using System.Collections.Generic;
 using Fusion;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace VoidRogues
 {
-    /// <summary>
-    /// Authoritative NPC simulation for VoidRogues.
-    ///
-    /// Design (LichLord NPC-replicator pattern, adapted for struct-driven networking):
-    ///   - A single <see cref="ContextBehaviour"/> owns all NPC state in the scene.
-    ///   - State lives in a fixed-size <see cref="NetworkArray{T}"/> of
-    ///     <see cref="NPCState"/> structs (up to <see cref="MaxNPCs"/>).
-    ///   - AI logic runs on the host only inside <see cref="FixedUpdateNetwork"/>.
-    ///   - Clients receive state deltas and update <see cref="NonPlayerCharacter"/>
-    ///     visual instances in <see cref="Render"/>.
-    ///   - Lives on the GameplayScene / SceneContext hierarchy.
-    ///     <see cref="SceneContext.NonPlayerCharacterManager"/> holds the direct reference.
-    /// </summary>
     public class NonPlayerCharacterManager : ContextBehaviour
     {
-        public const int MaxNPCs = 512;
+        [SerializeField] private NonPlayerCharacterReplicator _replicatorPrefab;
+        [SerializeField] private NonPlayerCharacterDefinition[] _definitionTable;
+        [SerializeField] private LayerMask hitMask = ~0;
+        [SerializeField] private float raycastLength = 6f;
 
-        [Header("NPC Database")]
-        [Tooltip("Index must match NPCState.TypeIndex.")]
-        [SerializeField] private NPCDefinition[] _npcDatabase;
+        private List<NonPlayerCharacterReplicator> _replicators = new List<NonPlayerCharacterReplicator>();
 
-        [Header("Prefab")]
-        [Tooltip("NonPlayerCharacter prefab instantiated for each active NPC slot.")]
-        [SerializeField] private NonPlayerCharacter _npcPrefab;
+        public Action<NonPlayerCharacter> OnCharacterSpawned;
+        public Action<NonPlayerCharacter> OnCharacterDespawned;
 
-        [Header("Spawn Configuration")]
-        [Tooltip("NPCs to spawn when the scene starts.")]
-        [SerializeField] private NPCSpawnPoint[] _spawnPoints;
-
-        // ------------------------------------------------------------------
-        // Networked state
-        // ------------------------------------------------------------------
-
-        [Networked, Capacity(MaxNPCs)]
-        private NetworkArray<NPCState> _npcs { get; }
-
-        // ------------------------------------------------------------------
-        // Local state (non-networked)
-        // ------------------------------------------------------------------
-
-        private ChangeDetector _changes;
-
-        /// <summary>
-        /// Visual instances driven by <see cref="NPCState"/>.
-        /// Index matches the <see cref="_npcs"/> array.
-        /// </summary>
-        private NonPlayerCharacter[] _visuals;
-
-        // Player positions cached per-tick for AI (host only).
-        private readonly List<Vector2> _playerPositions = new List<Vector2>(4);
-        private readonly List<int>     _playerIndices   = new List<int>(4);
-
-        // Spawn origin positions for each NPC slot (set on activation).
-        private Vector2[] _spawnOrigins;
-
-        // Collider-to-index lookup populated each render frame.
-        private readonly Dictionary<Collider2D, int> _colliderIndex = new Dictionary<Collider2D, int>();
-
-        private bool _hasSpawned;
-
-        // ------------------------------------------------------------------
-        // Lifecycle
-        // ------------------------------------------------------------------
+        public void AddReplicator(NonPlayerCharacterReplicator replicator)
+        {
+            if (!_replicators.Contains(replicator))
+            {
+                _replicators.Add(replicator);
+            }
+        }
 
         public override void Spawned()
         {
-            _changes      = GetChangeDetector(ChangeDetector.Source.SimulationState);
-            _visuals      = new NonPlayerCharacter[MaxNPCs];
-            _spawnOrigins = new Vector2[MaxNPCs];
-
-            // Auto-spawn configured NPCs on the host.
-            if (Runner.IsServer)
+            // Initialize the static definition table for lookups.
+            if (_definitionTable != null)
             {
-                SpawnConfiguredNPCs();
+                NonPlayerCharacterTable.Initialize(_definitionTable);
             }
         }
 
-        // ------------------------------------------------------------------
-        // Simulation (host only meaningful path)
-        // ------------------------------------------------------------------
-
-        public override void FixedUpdateNetwork()
+        private FNonPlayerCharacterData CreateNPCData(Vector3 spawnPos,
+              NonPlayerCharacterDefinition definition,
+              ENPCSpawnType spawnType,
+              ETeamID teamID,
+              EAttitude attitude)
         {
-            if (!Runner.IsServer) return;
-
-            CachePlayerPositions();
-
-            for (int i = 0; i < MaxNPCs; i++)
+            FNonPlayerCharacterData data = new FNonPlayerCharacterData
             {
-                var state = _npcs[i];
-                if (!state.IsActive) continue;
+                DefinitionID = definition.TableID,
+                SpawnType = spawnType,
+                Position = spawnPos,
+                Rotation = Quaternion.identity
+            };
 
-                state = NPCAI.Tick(state, _spawnOrigins[i], _playerPositions, _playerIndices,
-                                   _npcDatabase, Runner.DeltaTime, Runner.Tick);
-                _npcs.Set(i, state);
-            }
+            var dataDefinition = definition.GetDataDefinition(spawnType);
+            if (dataDefinition != null)
+                dataDefinition.InitializeData(ref data, definition, spawnType, teamID, attitude);
+
+            return data;
         }
 
-        private void CachePlayerPositions()
+        private int SpawnNPC(ref FNonPlayerCharacterData data)
         {
-            _playerPositions.Clear();
-            _playerIndices.Clear();
+            if (!Runner.IsSharedModeMasterClient && Runner.GameMode != GameMode.Single)
+                return -1;
 
-            foreach (var player in Runner.ActivePlayers)
-            {
-                if (Runner.TryGetPlayerObject(player, out var obj))
-                {
-                    _playerPositions.Add(obj.transform.position);
-                    _playerIndices.Add(player.AsIndex);
-                }
-            }
+            NonPlayerCharacterReplicator replicator = GetReplicatorWithFreeSlots();
+            if (replicator == null)
+                return -1;
+
+            int freeLocalIndex = replicator.GetFreeIndex();
+            if (freeLocalIndex == -1)
+                return -1;
+
+            int fullIndex = freeLocalIndex + (replicator.Index * NonPlayerCharacterConstants.MAX_NPC_REPS);
+            replicator.SpawnNPC(ref data, freeLocalIndex);
+            return fullIndex;
         }
 
-        // ------------------------------------------------------------------
-        // Presentation (all peers)
-        // ------------------------------------------------------------------
-
-        public override void Render()
+        public void SpawnNPCInvader(Vector3 spawnPos,
+            NonPlayerCharacterDefinition definition,
+            ETeamID teamID,
+            EAttitude attitude,
+            int formationIndex)
         {
-            _colliderIndex.Clear();
+            if (!HasStateAuthority)
+                return;
 
-            for (int i = 0; i < MaxNPCs; i++)
+            FNonPlayerCharacterData data = CreateNPCData(spawnPos, definition, ENPCSpawnType.Invader, teamID, attitude);
+
+            var invaderData = definition.GetDataDefinition(ENPCSpawnType.Invader) as InvaderDataDefinition;
+            if (invaderData == null)
             {
-                var state = _npcs[i];
-
-                if (state.IsActive)
-                {
-                    EnsureVisual(i, state.TypeIndex);
-                    var npc = _visuals[i];
-                    if (npc != null)
-                    {
-                        npc.gameObject.SetActive(true);
-                        npc.ApplyState(state);
-
-                        // Register collider for interaction lookup.
-                        var col = npc.GetCollider();
-                        if (col != null)
-                        {
-                            _colliderIndex[col] = i;
-                        }
-                    }
-                }
-                else if (_visuals[i] != null)
-                {
-                    _visuals[i].Deactivate();
-                }
-            }
-        }
-
-        private void EnsureVisual(int index, byte typeIndex)
-        {
-            if (_visuals[index] != null) return;
-            if (typeIndex >= _npcDatabase.Length) return;
-
-            var def = _npcDatabase[typeIndex];
-
-            NonPlayerCharacter npc = null;
-
-            if (_npcPrefab != null)
-            {
-                npc = Instantiate(_npcPrefab);
-            }
-            else if (def.VisualPrefab != null)
-            {
-                var go = Instantiate(def.VisualPrefab);
-                npc = go.GetComponent<NonPlayerCharacter>();
-                if (npc == null)
-                {
-                    npc = go.AddComponent<NonPlayerCharacter>();
-                }
-            }
-
-            if (npc == null) return;
-
-            npc.Initialise(index, def);
-            _visuals[index] = npc;
-        }
-
-        // ------------------------------------------------------------------
-        // Spawn API
-        // ------------------------------------------------------------------
-
-        /// <summary>
-        /// Spawns all NPCs defined in <see cref="_spawnPoints"/>.
-        /// Safe to call multiple times – only the first invocation has an effect.
-        /// Called automatically from <see cref="Spawned"/> on the host.
-        /// </summary>
-        public void SpawnConfiguredNPCs()
-        {
-            if (_hasSpawned) return;
-            _hasSpawned = true;
-
-            if (_spawnPoints == null || _spawnPoints.Length == 0) return;
-
-            foreach (var sp in _spawnPoints)
-            {
-                ActivateNPC(sp.TypeIndex, sp.Position);
-            }
-
-            Debug.Log($"[NonPlayerCharacterManager] Spawned {_spawnPoints.Length} NPC(s).");
-        }
-
-        /// <summary>
-        /// Activates an NPC slot. Must be called on the host.
-        /// </summary>
-        public void ActivateNPC(byte typeIndex, Vector2 position)
-        {
-            if (!Runner.IsServer) return;
-            if (typeIndex >= _npcDatabase.Length) return;
-
-            for (int i = 0; i < MaxNPCs; i++)
-            {
-                if (_npcs[i].IsActive) continue;
-
-                _spawnOrigins[i] = position;
-
-                _npcs.Set(i, new NPCState
-                {
-                    IsActive          = true,
-                    Position          = position,
-                    TypeIndex         = typeIndex,
-                    AnimState         = 0, // Idle
-                    DialogueState     = 0, // None
-                    InteractingPlayer = -1,
-                    WanderTarget      = position,
-                    WanderStartTick   = Runner.Tick,
-                });
+                Debug.Log("Trying to spawn a non-invader as an invader");
                 return;
             }
 
-            Debug.LogWarning("[NonPlayerCharacterManager] All NPC slots are occupied.");
+            invaderData.SetFormationIndex(formationIndex, ref data);
+
+            SpawnNPC(ref data);
         }
 
-        /// <summary>
-        /// Deactivates an NPC slot. Must be called on the host.
-        /// </summary>
-        public void DeactivateNPC(int index)
+        public int SpawnNPCWorker(Vector3 spawnPos, NonPlayerCharacterDefinition definition, ETeamID teamID, int strongholdId, int workerIndex)
         {
-            if (!Runner.IsServer) return;
-            if (index < 0 || index >= MaxNPCs) return;
+            if (!Runner.IsSharedModeMasterClient && Runner.GameMode != GameMode.Single)
+                return -1;
 
-            var state = _npcs[index];
-            if (!state.IsActive) return;
+            FNonPlayerCharacterData data = CreateNPCData(spawnPos, definition, ENPCSpawnType.Worker, teamID, EAttitude.Passive);
 
-            state.IsActive = false;
-            _npcs.Set(index, state);
-        }
-
-        // ------------------------------------------------------------------
-        // Query API
-        // ------------------------------------------------------------------
-
-        /// <summary>
-        /// Returns the array index for an NPC that owns the given collider, or -1.
-        /// </summary>
-        public int GetNPCIndexForCollider(Collider2D col)
-        {
-            return _colliderIndex.TryGetValue(col, out int idx) ? idx : -1;
-        }
-
-        /// <summary>
-        /// Returns a read-only snapshot of the NPC state at the given index.
-        /// </summary>
-        public NPCState GetNPCState(int index)
-        {
-            if (index < 0 || index >= MaxNPCs) return default;
-            return _npcs[index];
-        }
-
-        /// <summary>
-        /// Returns the <see cref="NonPlayerCharacter"/> visual for the given slot,
-        /// or null if no visual has been created yet.
-        /// </summary>
-        public NonPlayerCharacter GetNPCVisual(int index)
-        {
-            if (index < 0 || index >= MaxNPCs) return null;
-            return _visuals != null ? _visuals[index] : null;
-        }
-
-        /// <summary>Number of currently active NPCs.</summary>
-        public int ActiveNPCCount
-        {
-            get
+            var workerData = definition.GetDataDefinition(ENPCSpawnType.Worker) as WorkerDataDefinition;
+            if (workerData == null)
             {
-                int count = 0;
-                for (int i = 0; i < MaxNPCs; i++)
+                Debug.Log("Trying to spawn a non-worker as a worker");
+                return -1;
+            }
+
+            workerData.SetState(ENPCState.Spawning, ref data);
+            workerData.SetStrongholdId(strongholdId, ref data);
+            workerData.SetWorkerIndex(workerIndex, ref data);
+
+            return SpawnNPC(ref data);
+        }
+
+        public NonPlayerCharacterReplicator GetReplicatorForIndex(int replicatorIndex)
+        {
+            foreach (var replicator in _replicators)
+            {
+                if (replicator.Index == replicatorIndex)
+                    return replicator;
+            }
+
+            var newReplicator = Runner.Spawn(_replicatorPrefab, Vector3.zero, Quaternion.identity, null,
+                                onBeforeSpawned: (runner, obj) =>
+                                {
+                                    var r = obj.GetComponent<NonPlayerCharacterReplicator>();
+                                    r.Index = (byte)replicatorIndex;
+                                }
+            );
+
+            if (newReplicator != null)
+            {
+                AddReplicator(newReplicator);
+                return newReplicator;
+            }
+
+            return null;
+        }
+
+        public NonPlayerCharacterReplicator GetReplicatorWithFreeSlots()
+        {
+            foreach (var replicator in _replicators)
+            {
+                if (replicator.HasFreeIndex())
+                    return replicator;
+            }
+
+            if (_replicators.Count < NonPlayerCharacterConstants.MAX_REPLICATORS)
+            {
+                var newReplicator = Runner.Spawn(_replicatorPrefab, Vector3.zero, Quaternion.identity, null,
+                                    onBeforeSpawned: (runner, obj) =>
+                                    {
+                                        var r = obj.GetComponent<NonPlayerCharacterReplicator>();
+                                        r.Index = (byte)_replicators.Count;
+                                    }
+                );
+
+                if (newReplicator != null)
                 {
-                    if (_npcs[i].IsActive) count++;
+                    AddReplicator(newReplicator);
+                    return newReplicator;
                 }
-                return count;
+            }
+
+            Debug.Log("No replicator with free slots found");
+            return null;
+        }
+
+        public void DespawnAllInvaders()
+        {
+            if (!HasStateAuthority)
+                return;
+
+            foreach (var replicator in _replicators)
+            {
+                replicator.DespawnInvaders();
             }
         }
 
-        /// <summary>The NPC definitions database (read-only).</summary>
-        public NPCDefinition[] NPCDatabase => _npcDatabase;
-    }
+        public void SetInvaderAttitude(EAttitude newAttitude)
+        {
+            if (!HasStateAuthority)
+                return;
 
-    /// <summary>
-    /// Inspector-configurable NPC spawn point.
-    /// </summary>
-    [System.Serializable]
-    public class NPCSpawnPoint
-    {
-        [Tooltip("Index into NonPlayerCharacterManager's NPC database.")]
-        public byte TypeIndex;
+            foreach (var replicator in _replicators)
+            {
+                replicator.SetInvaderAttitude(newAttitude);
+            }
+        }
 
-        [Tooltip("World-space position where the NPC will be placed.")]
-        public Vector2 Position;
+        public FNonPlayerCharacterData GetNpcDataAtIndex(int fullIndex)
+        {
+            int localIndex = fullIndex % NonPlayerCharacterConstants.MAX_NPC_REPS;
+            int replicatorIndex = fullIndex / NonPlayerCharacterConstants.MAX_NPC_REPS;
+
+            if (_replicators.Count <= replicatorIndex)
+                return new FNonPlayerCharacterData();
+
+            return _replicators[replicatorIndex].GetNpcData(localIndex);
+        }
+
+        public NonPlayerCharacterRuntimeState GetNpcRuntimeStateAtIndex(int fullIndex)
+        {
+            int localIndex = fullIndex % NonPlayerCharacterConstants.MAX_NPC_REPS;
+            int replicatorIndex = fullIndex / NonPlayerCharacterConstants.MAX_NPC_REPS;
+
+            if (_replicators.Count <= replicatorIndex)
+                return null;
+
+            return _replicators[replicatorIndex].GetNpcRuntimeState(localIndex);
+        }
+
+        public NonPlayerCharacter GetNpcAtIndex(int fullIndex)
+        {
+            int localIndex = fullIndex % NonPlayerCharacterConstants.MAX_NPC_REPS;
+            int replicatorIndex = fullIndex / NonPlayerCharacterConstants.MAX_NPC_REPS;
+
+            if (_replicators.Count <= replicatorIndex)
+                return null;
+
+            return _replicators[replicatorIndex].GetNpc(localIndex);
+        }
     }
 }
