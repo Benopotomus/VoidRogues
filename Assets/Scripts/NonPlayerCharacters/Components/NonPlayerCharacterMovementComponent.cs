@@ -39,12 +39,22 @@ namespace VoidRogues.NonPlayerCharacters
             _lastPosition = runtimeState.GetPosition();
             _cachedTransform = transform;
             _follower = GetComponent<IAstarAI>();
+            if (_follower == null)
+            {
+                var followerEntity = GetComponent<FollowerEntity>();
+                if (followerEntity == null)
+                    followerEntity = gameObject.AddComponent<FollowerEntity>();
+
+                _follower = followerEntity;
+            }
+
             if (_follower != null)
             {
                 _follower.updatePosition = _followerUpdatePosition;
                 _follower.updateRotation = _followerUpdateRotation;
                 _follower.simulateMovement = _followerCanMove;
                 _follower.maxSpeed = _followerMaxSpeed;
+                _follower.Teleport(runtimeState.GetPosition(), clearPath: true);
             }
         }
 
@@ -148,7 +158,10 @@ namespace VoidRogues.NonPlayerCharacters
 
             _moveTarget = newMoveTarget;
             if (_follower != null)
+            {
                 _follower.destination = newMoveTarget;
+                _follower.SearchPath();
+            }
         }
 
         public void StartRecycle()
