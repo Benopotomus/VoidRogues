@@ -82,6 +82,19 @@ namespace VoidRogues.NonPlayerCharacters
             return freeIndex;
         }
 
+        public int SpawnNPC(Vector3 spawnPos,
+            NonPlayerCharacterDefinition definition,
+            ENPCSpawnType spawnType,
+            ETeamID teamID,
+            EAttitude attitude)
+        {
+            if (!HasStateAuthority)
+                return -1;
+
+            FNonPlayerCharacterData data = CreateNPCData(spawnPos, definition, spawnType, teamID, attitude);
+            return SpawnNPC(ref data);
+        }
+
         public void SpawnNPCInvader(Vector3 spawnPos,
             NonPlayerCharacterDefinition definition,
             ETeamID teamID,

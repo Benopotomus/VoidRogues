@@ -5,7 +5,9 @@ namespace VoidRogues
     using System.Collections.Generic;
     using UnityEngine;
     using VoidRogues.Players;
+    using VoidRogues.NonPlayerCharacters;
     using Fusion;
+    using Pathfinding;
     using System;
 
     public struct KillData : INetworkStruct
@@ -56,6 +58,14 @@ namespace VoidRogues
         public float TimeLimit;
         public float BackfillTimeLimit;
 
+        [Header("NPC Spawning")]
+        [SerializeField] private float _npcSpawnInterval = 10f;
+        [SerializeField] private float _npcSpawnRadius = 20f;
+        [SerializeField] private NonPlayerCharacterDefinition _npcDefinition;
+        [SerializeField] private ENPCSpawnType _npcSpawnType = ENPCSpawnType.Invader;
+        [SerializeField] private ETeamID _npcTeamID;
+        [SerializeField] private EAttitude _npcAttitude = EAttitude.Hostile;
+
         // public Announcement[] Announcements;
 
         // PUBLIC MEMBERS
@@ -71,6 +81,9 @@ namespace VoidRogues
 
         private DefaultPlayerComparer _playerComparer = new DefaultPlayerComparer();
         private float _backfillTimerS;
+
+        [Networked]
+        private TickTimer _npcSpawnTimer { get; set; }
 
         // PUBLIC METHODS
 
@@ -180,11 +193,25 @@ namespace VoidRogues
 
         public override void FixedUpdateNetwork()
         {
+            if (!HasStateAuthority)
+                return;
+
+            if (_npcDefinition != null && _npcSpawnInterval > 0f && _npcSpawnTimer.Expired(Runner))
+            {
+                TrySpawnNPCOnNavmesh();
+                _npcSpawnTimer = TickTimer.CreateFromSeconds(Runner, _npcSpawnInterval);
+            }
         }
 
         // GameplayMode INTERFACE
 
-        protected virtual void OnActivate() {}
+        protected virtual void OnActivate()
+        {
+            if (HasStateAuthority && _npcDefinition != null && _npcSpawnInterval > 0f)
+            {
+                _npcSpawnTimer = TickTimer.CreateFromSeconds(Runner, _npcSpawnInterval);
+            }
+        }
 
         protected virtual void PreparePlayerStatistics(ref FPlayerStatistics playerStatistics) {}
 
@@ -203,6 +230,46 @@ namespace VoidRogues
         private void OnLevelGenerated()
         {
             Debug.Log("Level Loaded, Setting up Mode Elements");
+        }
+
+        private void TrySpawnNPCOnNavmesh()
+        {
+            var manager = Context.NonPlayerCharacterManager;
+            if (manager == null)
+                return;
+
+            Vector3 origin = Vector3.zero;
+            var player = Context.LocalPlayerCharacter;
+            if (player != null)
+                origin = player.transform.position;
+
+            Vector3 spawnPos;
+            if (!GetPointOnNavmesh(origin, _npcSpawnRadius, out spawnPos))
+                return;
+
+            manager.SpawnNPC(spawnPos, _npcDefinition, _npcSpawnType, _npcTeamID, _npcAttitude);
+        }
+
+        private bool GetPointOnNavmesh(Vector3 center, float radius, out Vector3 result)
+        {
+            result = center;
+
+            if (AstarPath.active == null)
+                return false;
+
+            Vector3 randomPoint = center + UnityEngine.Random.insideUnitSphere * radius;
+            randomPoint.y = center.y;
+
+            var constraint = NNConstraint.Default;
+            constraint.constrainWalkability = true;
+            constraint.walkable = true;
+
+            var info = AstarPath.active.GetNearest(randomPoint, constraint);
+            if (info.node == null)
+                return false;
+
+            result = info.position;
+            return true;
         }
 
         protected void CheckWinCondition()
