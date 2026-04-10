@@ -106,6 +106,10 @@ namespace VoidRogues.NonPlayerCharacters
 
             _healthComponent.OnRender(runtimeState, tick);
             _stateComponent.UpdateState(runtimeState, hasAuthority, tick);
+            if (hasAuthority)
+            {
+                _brainComponent.AuthorityUpdate(tick);
+            }
 
             _lifetimeComponent.UpdateLifetime(runtimeState, hasAuthority, tick);
             _animationController.SyncTransformToEntity();
