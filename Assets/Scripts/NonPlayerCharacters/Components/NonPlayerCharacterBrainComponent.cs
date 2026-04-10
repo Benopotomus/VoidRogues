@@ -58,6 +58,7 @@ namespace VoidRogues.NonPlayerCharacters
 
         [SerializeField]
         private LayerMask _losLayerMask;
+        private readonly List<PlayerCharacter> _allPlayers = new List<PlayerCharacter>(16);
 
         public void Awake()
         {
@@ -110,20 +111,21 @@ namespace VoidRogues.NonPlayerCharacters
             if (_npc == null || _npc.Context == null || _npc.Context.Runner == null)
                 return;
 
-            var allPlayers = _npc.Context.Runner.GetAllBehaviours<PlayerCharacter>();
-            if (allPlayers == null || allPlayers.Count == 0)
+            _allPlayers.Clear();
+            _npc.Context.Runner.GetAllBehaviours(_allPlayers);
+            if (_allPlayers.Count == 0)
                 return;
 
             Vector3 npcPosition = _npc.CachedTransform.position;
             float closestDistanceSqr = float.MaxValue;
 
-            for (int i = 0; i < allPlayers.Count; i++)
+            for (int i = 0; i < _allPlayers.Count; i++)
             {
-                var player = allPlayers[i];
+                var player = _allPlayers[i];
                 if (player == null || player.gameObject == null || !player.gameObject.activeInHierarchy)
                     continue;
 
-                if (player.OwningPlayer != null && player.OwningPlayer.Statistics.IsAlive == false)
+                if (player.OwningPlayer != null && !player.OwningPlayer.Statistics.IsAlive)
                     continue;
 
                 float distanceSqr = (player.transform.position - npcPosition).sqrMagnitude;
