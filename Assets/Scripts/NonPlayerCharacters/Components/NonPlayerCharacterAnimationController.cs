@@ -36,7 +36,7 @@ namespace VoidRogues.NonPlayerCharacters
         public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState)
         {
             const int TotalScaleSteps = 10;
-            int scaleIndex = runtimeState.FullIndex % TotalScaleSteps;
+            int scaleIndex = runtimeState.Index % TotalScaleSteps;
             modelScale = Mathf.Lerp(runtimeState.Definition.ModelScale.x,
                 runtimeState.Definition.ModelScale.y,
                 scaleIndex / (TotalScaleSteps - 1f));

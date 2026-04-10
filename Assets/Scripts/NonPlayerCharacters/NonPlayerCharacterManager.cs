@@ -36,15 +36,13 @@ namespace VoidRogues.NonPlayerCharacters
         {
             base.Spawned();
 
-            Context.NonPlayerCharacterManager.AddReplicator(this);
             _spawner.OnSpawned += OnNonPlayerCharacterSpawned;
             _loadStates = new FNPCLoadState[NonPlayerCharacterConstants.MAX_NPC_REPS];
 
             for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
-                int fullIndex = i + (NonPlayerCharacterConstants.MAX_NPC_REPS * Index);
                 _loadStates[i] = new FNPCLoadState();
-                _localRuntimeStates[i] = new NonPlayerCharacterRuntimeState(this, i, fullIndex);
+                _localRuntimeStates[i] = new NonPlayerCharacterRuntimeState(this, i);
                 _localRuntimeStates[i].CopyData(ref _npcDatas.GetRef(i));
             }
         }
@@ -152,6 +150,11 @@ namespace VoidRogues.NonPlayerCharacters
             }
 
             return -1;
+        }
+
+        public void ReplicateRuntimeState(NonPlayerCharacterRuntimeState runtimeState)
+        {
+            _npcDatas.Set(runtimeState.Index, runtimeState.Data);
         }
 
         public override void Render()

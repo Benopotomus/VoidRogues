@@ -1442,12 +1442,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4bd1d99c653644189ff0c31c42a4fdde, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  _replicatorPrefab: {fileID: 11420000000000000, guid: c8a3b2e1d4f65798a1b2c3d4e5f67890, type: 3}
-  _definitionTable: []
-  hitMask:
-    serializedVersion: 2
-    m_Bits: 4294967295
-  raycastLength: 6
+  _spawner: {fileID: 0}
+  _loadStates: []
 --- !u!114 &3000000000000002
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1460,10 +1456,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 930611e25abc499c83f787f938d0517c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _cachedName: 
+  _nameCached: 0
+  _cachedGameObject: {fileID: 0}
+  _gameObjectCached: 0
+  _cachedTransform: {fileID: 0}
+  _transformCached: 0
   _toggleKey: 288
   _drawGizmos: 1
-  _gizmoColor: {r: 0, g: 1, b: 1, a: 1}
+  _gizmoColor:
+    r: 0
+    g: 1
+    b: 1
+    a: 1
   _manager: {fileID: 3000000000000001}
+  _showOverlay: 0
+  _scrollPos: {x: 0, y: 0}
 --- !u!4 &3000000000000003
 Transform:
   m_ObjectHideFlags: 0

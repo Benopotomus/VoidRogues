@@ -1,17 +1,21 @@
-﻿using System;
-using UnityEngine;
-
+﻿
 namespace VoidRogues
 {
+    using System;
+    using UnityEngine;
+    using VoidRogues.NonPlayerCharacters;
+
     [Serializable]
     [CreateAssetMenu(fileName = "GlobalTables", menuName = "VoidRogues/Tables/GlobalTables")]
     public class GlobalTables : ScriptableObject
     {
+        public NonPlayerCharacterTable NonPlayerCharacterTable;
+
         /*
         public ProjectileTable ProjectileTable;
         public PropTable PropTable;
         public BuildableTable BuildableTable;
-        public NonPlayerCharacterTable NonPlayerCharacterTable;
+
         public ManeuverTable ManeuverTable;
         public InvasionTable InvasionTable;
         public CurrencyTable CurrencyTable;

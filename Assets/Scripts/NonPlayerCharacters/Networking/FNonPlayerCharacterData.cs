@@ -26,7 +26,7 @@ namespace VoidRogues.NonPlayerCharacters
 
         public NonPlayerCharacterDefinition Definition
         {
-            get => NonPlayerCharacterTable.TryGetDefinition(DefinitionID);
+            get => Global.Tables.NonPlayerCharacterTable.TryGetDefinition(DefinitionID);
         }
 
         public ENPCSpawnType SpawnType
@@ -134,11 +134,7 @@ namespace VoidRogues.NonPlayerCharacters
             set => _events = value;
         }
 
-        public byte Attitude
-        {
-            get => _attitude;
-            set => _attitude = value;
-        }
+
 
         public void Copy(FNonPlayerCharacterData other)
         {
@@ -146,8 +142,6 @@ namespace VoidRogues.NonPlayerCharacters
             _condition = other._condition;
             _configuration = other._configuration;
             _events = other._events;
-            _attitude = other._attitude;
-            CarriedItem = other.CarriedItem;
         }
 
         public void Copy(ref FNonPlayerCharacterData other)
@@ -156,8 +150,6 @@ namespace VoidRogues.NonPlayerCharacters
             _condition = other._condition;
             _configuration = other._configuration;
             _events = other._events;
-            _attitude = other._attitude;
-            CarriedItem = other.CarriedItem;
         }
 
         public bool IsEqual(ref FNonPlayerCharacterData other)
@@ -165,7 +157,6 @@ namespace VoidRogues.NonPlayerCharacters
             return _condition == other._condition &&
                    _configuration == other._configuration &&
                    _events == other._events &&
-                   _attitude == other._attitude &&
                     _transform.IsEqual(ref other._transform);
         }
 
@@ -174,7 +165,6 @@ namespace VoidRogues.NonPlayerCharacters
             return _condition == other._condition &&
                    _configuration == other._configuration &&
                    _events == other._events &&
-                   _attitude == other._attitude &&
                    _transform.IsEqual(ref other._transform);
         }
 

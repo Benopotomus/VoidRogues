@@ -36,9 +36,6 @@ namespace VoidRogues.NonPlayerCharacters
         [SerializeField] private NonPlayerCharacterAnimationController _animationController;
         public NonPlayerCharacterAnimationController AnimationController => _animationController;
 
-        [SerializeField] private NonPlayerCharacterAttitudeComponent _attitudeComponent;
-        public NonPlayerCharacterAttitudeComponent AttitudeComponent => _attitudeComponent;
-
         [SerializeField] private NonPlayerCharacterSpawningComponent _spawningComponent;
         public NonPlayerCharacterSpawningComponent SpawningComponent => _spawningComponent;
 
@@ -57,15 +54,9 @@ namespace VoidRogues.NonPlayerCharacters
         private SceneContext _context;
         public SceneContext Context => _context;
 
-        public float BonusRadius { get { return 1; } }
-
         [SerializeField]
-        private int _localIndex;
-        public int LocalIndex => _localIndex;
-
-        [SerializeField]
-        private int _fullIndex;
-        public int FullIndex => _fullIndex;
+        private int _index;
+        public int Index => _index;
 
         private ETeamID _teamId;
         public ETeamID TeamID => _teamId;
@@ -103,14 +94,12 @@ namespace VoidRogues.NonPlayerCharacters
             _healthComponent.OnSpawned(runtimeState);
             _movementComponent.OnSpawned(runtimeState, hasAuthority);
             _brainComponent.OnSpawned(runtimeState, hasAuthority);
-            _carriedItemComponent.OnSpawned(runtimeState);
-            _attitudeComponent.OnSpawned(runtimeState);
             _lifetimeComponent.OnSpawned(runtimeState, tick);
             _spawningComponent.OnSpawned(runtimeState);
             _stateComponent.OnSpawned(runtimeState, hasAuthority, tick);
             _animationController.OnSpawned(runtimeState);
 
-           _fullIndex = runtimeState.FullIndex;
+           _index = runtimeState.Index;
 
             Context.NonPlayerCharacterManager.OnCharacterSpawned(this);
         }
@@ -124,8 +113,6 @@ namespace VoidRogues.NonPlayerCharacters
 
             _healthComponent.OnRender(runtimeState, tick);
             _stateComponent.UpdateState(runtimeState, hasAuthority, tick);
-            _carriedItemComponent.OnRender(runtimeState);
-            _attitudeComponent.OnRender(runtimeState);
 
             _lifetimeComponent.UpdateLifetime(runtimeState, hasAuthority, tick);
             _animationController.SyncTransformToEntity();

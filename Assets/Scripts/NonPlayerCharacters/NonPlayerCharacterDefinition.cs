@@ -1,20 +1,23 @@
-using UnityEngine;
-using System.Collections.Generic;
 
 namespace VoidRogues.NonPlayerCharacters
 {
+    using UnityEngine;
+    using System.Collections.Generic;
+    using DWD.Utility.Loading;
+
+
     [CreateAssetMenu(fileName = "NonPlayerCharacterDefinition", menuName = "VoidRogues/NonPlayerCharacters/NonPlayerCharacterDefinition")]
     public class NonPlayerCharacterDefinition : TableObject
     {
-
         [SerializeField]
         protected string _name;
         public string Name => _name;
 
-        // Visuals
+        //Visuals
+        [BundleObject(typeof(GameObject))]
         [SerializeField]
-        protected GameObject _prefab;
-        public GameObject Prefab => _prefab;
+        protected BundleObject _prefabBundle;
+        public BundleObject PrefabBundle => _prefabBundle;
 
         [SerializeField]
         protected Sprite _icon;

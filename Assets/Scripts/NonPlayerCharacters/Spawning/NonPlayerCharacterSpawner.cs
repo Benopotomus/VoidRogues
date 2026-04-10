@@ -84,15 +84,15 @@ namespace VoidRogues.NonPlayerCharacters
 
             var instance = DWDObjectPool.Instance.SpawnAt(poolObject, spawnParams.Position, spawnParams.Rotation);
 
-            NonPlayerCharacter spawnedProp = instance.GetComponent<NonPlayerCharacter>();
+            NonPlayerCharacter spawnedNPC = instance.GetComponent<NonPlayerCharacter>();
 
-            if (spawnedProp == null)
+            if (spawnedNPC == null)
             {
                 Debug.LogWarning("NPC is Invalid, Check Bundles! (" + loadedBundle.BundleName + ")");
                 return;
             }
 
-            OnSpawned?.Invoke(spawnParams, spawnedProp);
+            OnSpawned?.Invoke(spawnParams, spawnedNPC);
         }
     }
 }

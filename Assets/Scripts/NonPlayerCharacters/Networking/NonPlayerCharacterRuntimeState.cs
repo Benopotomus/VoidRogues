@@ -7,11 +7,8 @@ namespace VoidRogues.NonPlayerCharacters
         public int PredictionStartTick;
         public int PredictionTimeoutTick; // Max lifetime of predictive state
 
-        private int _localIndex;
-        public int LocalIndex => _localIndex;
-
-        private int _fullIndex;
-        public int FullIndex => _fullIndex;
+        private int _index;
+        public int Index => _index;
 
         private NonPlayerCharacterManager _manager;
 
@@ -27,7 +24,7 @@ namespace VoidRogues.NonPlayerCharacters
             get
             {
                 if (_definition == null)
-                    _definition = NonPlayerCharacterTable.TryGetDefinition(_npcData.DefinitionID);
+                    _definition = Global.Tables.NonPlayerCharacterTable.TryGetDefinition(_npcData.DefinitionID);
 
                 return _definition;
             }
@@ -48,12 +45,11 @@ namespace VoidRogues.NonPlayerCharacters
             }
         }
 
-        public NonPlayerCharacterRuntimeState(NonPlayerCharacterManager manager, int localIndex, int fullIndex)
+        public NonPlayerCharacterRuntimeState(NonPlayerCharacterManager manager, int index)
         {
             _manager = manager;
             _context = manager.Context;
-            _localIndex = localIndex;
-            _fullIndex = fullIndex;
+            _index = index;
         }
 
         public void CopyData(ref FNonPlayerCharacterData other)
@@ -63,7 +59,7 @@ namespace VoidRogues.NonPlayerCharacters
             if (_npcData.DefinitionID == 0)
                 return;
 
-            _definition = NonPlayerCharacterTable.TryGetDefinition(_npcData.DefinitionID);
+            _definition = Global.Tables.NonPlayerCharacterTable.TryGetDefinition(_npcData.DefinitionID);
             _dataDefinition = _npcData.DataDefinition;
         }
 
@@ -136,20 +132,6 @@ namespace VoidRogues.NonPlayerCharacters
         public ENPCSpawnType GetSpawnType()
         {
             return _npcData.SpawnType;
-        }
-
-        public EAttitude GetAttitude()
-        {
-            return _npcData.DataDefinition.GetAttitude(ref _npcData);
-        }
-
-        public void SetAttitude(EAttitude newAttitude)
-        {
-            if (_npcData.DefinitionID == 0)
-                return;
-
-            DataDefinition.SetAttitude(newAttitude, ref _npcData);
-            _manager.ReplicateRuntimeState(this);
         }
 
         public int GetAdditiveHitReact()

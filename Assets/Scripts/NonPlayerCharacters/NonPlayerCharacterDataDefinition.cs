@@ -18,7 +18,6 @@ namespace VoidRogues.NonPlayerCharacters
         protected const int TEAM_SHIFT = SPAWN_TYPE_SHIFT + SPAWN_TYPE_BITS;
         protected const byte TEAM_MASK = (1 << TEAM_BITS) - 1;
 
-        // 19 total
 
         // Condition (byte)
         protected const int NPC_STATE_BITS = 4;           // 0–15
@@ -55,10 +54,6 @@ namespace VoidRogues.NonPlayerCharacters
             SetState(ENPCState.Idle, ref npcData);
             SetAnimationIndex(0, ref npcData);
             SetAdditiveHitReactIndex(0, ref npcData);
-
-            // Initialize Attitude
-            npcData.Attitude = 0;
-            SetAttitude(attitude, ref npcData);
         }
 
         // DefinitionID
@@ -145,22 +140,6 @@ namespace VoidRogues.NonPlayerCharacters
             npcData.Condition = condition;
         }
 
-        // Attitude
-        public EAttitude GetAttitude(ref FNonPlayerCharacterData npcData)
-        {
-            int rawValue = (npcData.Attitude >> ATTITUDE_SHIFT) & ATTITUDE_MASK;
-            EAttitude attitude = (EAttitude)rawValue;
-            return attitude;
-        }
-
-        public void SetAttitude(EAttitude newAttitude, ref FNonPlayerCharacterData npcData)
-        {
-            byte attitude = npcData.Attitude;
-            int statusValue = Mathf.Clamp((int)newAttitude, 0, ATTITUDE_MASK);
-            attitude = (byte)((attitude & ~(ATTITUDE_MASK << ATTITUDE_SHIFT)) | (statusValue << ATTITUDE_SHIFT));
-            npcData.Attitude = attitude;
-        }
-
         // Handle damage application
         public virtual void ApplyDamage(
             ref FNonPlayerCharacterData npcData,
@@ -196,16 +175,5 @@ namespace VoidRogues.NonPlayerCharacters
             npcData.Condition = condition;
         }
 
-        // Item
-
-        public virtual FItemData GetCarriedItem(ref FNonPlayerCharacterData npcData)
-        {
-            return npcData.CarriedItem;
-        }
-
-        public virtual void SetCarriedItem(FItemData itemData, ref FNonPlayerCharacterData npcData)
-        {
-            npcData.CarriedItem = itemData;
-        }
     }
 }
