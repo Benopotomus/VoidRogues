@@ -3,8 +3,6 @@
 namespace VoidRogues.NonPlayerCharacters
 {
     using DWD.Pooling;
-    using Fusion;
-    using System.Collections.Generic;
     using UnityEngine;
 
     public class NonPlayerCharacter : DWDObjectPoolObject //, IHitTarget, IHitInstigator, IChunkTrackable
@@ -80,11 +78,6 @@ namespace VoidRogues.NonPlayerCharacters
         }
 
 
-        [SerializeField]
-        private int _squadId;
-
-        [SerializeField]
-        private int _formationIndex;
 
         public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState, NonPlayerCharacterManager manager, bool hasAuthority, int tick)
         {
@@ -101,7 +94,7 @@ namespace VoidRogues.NonPlayerCharacters
 
            _index = runtimeState.Index;
 
-            Context.NonPlayerCharacterManager.OnCharacterSpawned(this);
+            Context.NonPlayerCharacterManager.OnCharacterSpawned?.Invoke(this);
         }
 
         public void OnRender(NonPlayerCharacterRuntimeState runtimeState,

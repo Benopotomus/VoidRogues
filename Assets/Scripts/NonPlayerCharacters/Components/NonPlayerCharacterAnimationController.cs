@@ -11,7 +11,7 @@ namespace VoidRogues.NonPlayerCharacters
 {
     public partial class NonPlayerCharacterAnimationController : MonoBehaviour
     {
-        [SerializeField] private NonPlayerCharacter _npc;
+        private NonPlayerCharacter _npc;
 
         // TODO: Port animation callback data with ProjectileDefinition from LichLord
         // [SerializeField]
@@ -35,6 +35,8 @@ namespace VoidRogues.NonPlayerCharacters
 
         public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState)
         {
+            _npc = GetComponent<NonPlayerCharacter>();
+
             const int TotalScaleSteps = 10;
             int scaleIndex = runtimeState.Index % TotalScaleSteps;
             modelScale = Mathf.Lerp(runtimeState.Definition.ModelScale.x,

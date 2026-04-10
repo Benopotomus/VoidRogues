@@ -4,7 +4,7 @@ namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterStateComponent : MonoBehaviour
     {
-        [SerializeField] private NonPlayerCharacter _npc;
+        private NonPlayerCharacter _npc;
         public NonPlayerCharacter NPC => _npc;
 
         [SerializeField] private ENPCState _currentState = ENPCState.Inactive;
@@ -18,6 +18,7 @@ namespace VoidRogues.NonPlayerCharacters
 
         public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState, bool hasAuthority, int tick)
         {
+            _npc = GetComponent<NonPlayerCharacter>();
             UpdateState(runtimeState, hasAuthority, tick, true);
         }
 

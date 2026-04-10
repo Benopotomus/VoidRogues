@@ -18,9 +18,7 @@ GameObject:
   - component: {fileID: 11400000000000005}
   - component: {fileID: 11400000000000006}
   - component: {fileID: 11400000000000007}
-  - component: {fileID: 11400000000000008}
   - component: {fileID: 11400000000000009}
-  - component: {fileID: 11400000000000010}
   - component: {fileID: 11400000000000012}
   - component: {fileID: 11400000000000013}
   m_Layer: 0
@@ -81,20 +79,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8aa5ca7f9aaf4e24b4a9450262e44c1f, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  _movementComponent: {fileID: 11400000000000003}
+  _stateComponent: {fileID: 11400000000000004}
+  _brainComponent: {fileID: 11400000000000002}
+  _hitReactComponent: {fileID: 11400000000000006}
+  _healthComponent: {fileID: 11400000000000005}
+  _weaponsComponent: {fileID: 11400000000000009}
   _animationController: {fileID: 11400000000000001}
-  _brain: {fileID: 11400000000000002}
-  _movement: {fileID: 11400000000000003}
-  _state: {fileID: 11400000000000004}
-  _health: {fileID: 11400000000000005}
-  _hitReact: {fileID: 11400000000000006}
   _spawningComponent: {fileID: 11400000000000007}
-  _attitude: {fileID: 11400000000000008}
-  _weapons: {fileID: 11400000000000009}
-  _carriedItem: {fileID: 11400000000000010}
-  _dialog: {fileID: 0}
-  _lifetime: {fileID: 11400000000000012}
+  _lifetimeComponent: {fileID: 11400000000000012}
   _meleeHitTracker: {fileID: 11400000000000013}
+  _cachedTransform: {fileID: 4000000000000000}
   _collider: {fileID: 13600000000000000}
+  _index: 0
+  _squadId: 0
+  _formationIndex: 0
 --- !u!114 &11400000000000001
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -210,21 +209,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   _npc: {fileID: 0}
   _spawnAttachment: {fileID: 0}
---- !u!114 &11400000000000008
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1000000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 11afcbe59fe03ba4980dc583c7b7aef8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _attitude: 0
-  _indicatorRenderer: {fileID: 0}
-  _colorProperty: _Color
 --- !u!114 &11400000000000009
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -240,23 +224,6 @@ MonoBehaviour:
   _weaponIndex: 0
   _handBoneLeft: {fileID: 0}
   _handBoneRight: {fileID: 0}
---- !u!114 &11400000000000010
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1000000000000000}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 1577b6093210db04fb8824ec588efa00, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _npc: {fileID: 0}
-  _stoneGO: {fileID: 0}
-  _woodGO: {fileID: 0}
-  _ironGO: {fileID: 0}
-  _deathCapsGO: {fileID: 0}
 --- !u!114 &11400000000000012
 MonoBehaviour:
   m_ObjectHideFlags: 0

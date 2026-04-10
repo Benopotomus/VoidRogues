@@ -22,7 +22,7 @@ namespace VoidRogues.NonPlayerCharacters
         public BrainTarget DepositTarget;
         public BrainTarget NullTarget;
 
-        [SerializeField] private NonPlayerCharacter _npc;
+        private NonPlayerCharacter _npc;
         public NonPlayerCharacter NPC => _npc;
 
         [SerializeField]
@@ -61,6 +61,8 @@ namespace VoidRogues.NonPlayerCharacters
 
         public void Awake()
         {
+            _npc = GetComponent<NonPlayerCharacter>();
+
             AttackTarget = new BrainTarget();
             AttackTarget.DistanceToTarget = 200f;
             AttackTarget.HasTarget = false;

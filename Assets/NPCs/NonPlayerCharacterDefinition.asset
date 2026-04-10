@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 91a596b24dabfd64990b1cc32c5a4de6, type: 3}
+  m_Name: NonPlayerCharacterDefinition
+  m_EditorClassIdentifier: 
+  _tableID: -1
+  _name: BaseNPC
+  _prefabBundle:
+    _name: 
+    _bundle: 
+  _icon: {fileID: 0}
+  _maxHealth: 100
+  _damageReduction: 3
+  _damageResistance: 0
+  _hitReactThreshold: 3
+  _walkSpeed: 5
+  _isFrontlineCombatant: 0
+  _weaponState: 0
+  _weaponLeft: 0
+  _weaponRight: 0
+  _modelScale: {x: 0, y: 0}
+  _spawnState:
+    StateTime: 2
+    _animationTrigger:
+      Action: 0
+      Weapon: 0
+      TriggerNumber: 0
+      Side: 0
+      Jumping: 0
+      RightWeapon: 0
+      IsMoving: 0
+      IsBlocking: 0
+      PlaybackSpeed: 0
+  _tasks: []
+  _spawnTypeDataDefinitions: []

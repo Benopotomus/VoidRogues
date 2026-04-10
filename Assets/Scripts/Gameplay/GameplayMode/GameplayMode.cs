@@ -196,7 +196,7 @@ namespace VoidRogues
             if (!HasStateAuthority)
                 return;
 
-            if (_npcDefinition != null && _npcSpawnInterval > 0f && _npcSpawnTimer.Expired(Runner))
+            if (_npcDefinition != null && _npcSpawnInterval > 0f && _npcSpawnTimer.ExpiredOrNotRunning(Runner))
             {
                 TrySpawnNPCOnNavmesh();
                 _npcSpawnTimer = TickTimer.CreateFromSeconds(Runner, _npcSpawnInterval);
