@@ -103,7 +103,60 @@ namespace VoidRogues.NonPlayerCharacters
 
         public void FindCurrentTargets()
         {
-            // TODO: Port target finding from LichLord (requires IChunkTrackable, World systems)
+            _targetPlayer = null;
+            AttackTarget.HasTarget = false;
+            AttackTarget.DistanceToTarget = 200f;
+
+            if (_npc == null || _npc.Context == null || _npc.Context.Runner == null)
+                return;
+
+            var allPlayers = _npc.Context.Runner.GetAllBehaviours<PlayerCharacter>();
+            if (allPlayers == null || allPlayers.Count == 0)
+                return;
+
+            Vector3 npcPosition = _npc.CachedTransform.position;
+            float closestDistanceSqr = float.MaxValue;
+
+            for (int i = 0; i < allPlayers.Count; i++)
+            {
+                var player = allPlayers[i];
+                if (player == null || player.gameObject == null || !player.gameObject.activeInHierarchy)
+                    continue;
+
+                if (player.OwningPlayer != null && player.OwningPlayer.Statistics.IsAlive == false)
+                    continue;
+
+                float distanceSqr = (player.transform.position - npcPosition).sqrMagnitude;
+                if (distanceSqr < closestDistanceSqr)
+                {
+                    closestDistanceSqr = distanceSqr;
+                    _targetPlayer = player;
+                }
+            }
+
+            if (_targetPlayer == null)
+                return;
+
+            AttackTarget.HasTarget = true;
+            AttackTarget.DistanceToTarget = Mathf.Sqrt(closestDistanceSqr);
+            _moveTarget = _targetPlayer.transform.position;
+            _losTarget = _moveTarget;
+
+            if (_npc.Movement != null)
+                _npc.Movement.SetMoveTargetPosition(_moveTarget);
+        }
+
+        public void AuthorityUpdate(int tick)
+        {
+            if ((tick % _updateSensesTick) == 0)
+                FindCurrentTargets();
+
+            if (_targetPlayer != null && (tick % _updateDestinationTick) == 0)
+            {
+                _moveTarget = _targetPlayer.transform.position;
+                if (_npc != null && _npc.Movement != null)
+                    _npc.Movement.SetMoveTargetPosition(_moveTarget);
+            }
         }
 
         public void OnHitFromAnimation()
