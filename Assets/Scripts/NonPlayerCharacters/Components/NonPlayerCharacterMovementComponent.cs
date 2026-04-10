@@ -49,7 +49,10 @@ namespace VoidRogues.NonPlayerCharacters
             }
 
             if (_follower == null)
+            {
+                Debug.LogWarning($"[{nameof(NonPlayerCharacterMovementComponent)}] Missing IAstarAI on {name}. NPC pathfinding is disabled.");
                 return;
+            }
 
             _follower.updatePosition = _followerUpdatePosition;
             _follower.updateRotation = _followerUpdateRotation;
@@ -160,7 +163,8 @@ namespace VoidRogues.NonPlayerCharacters
             if (_follower != null)
             {
                 _follower.destination = newMoveTarget;
-                _follower.SearchPath();
+                if (_follower.canSearch)
+                    _follower.SearchPath();
             }
         }
 
