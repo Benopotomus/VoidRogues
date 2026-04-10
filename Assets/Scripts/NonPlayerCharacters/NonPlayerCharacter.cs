@@ -108,7 +108,13 @@ namespace VoidRogues.NonPlayerCharacters
             _stateComponent.UpdateState(runtimeState, hasAuthority, tick);
             if (hasAuthority)
             {
+                _movementComponent.AuthorityUpdate(runtimeState, renderDeltaTime, tick);
                 _brainComponent.AuthorityUpdate(tick);
+            }
+            else
+            {
+                //_brainComponent.RemoteUpdate(runtimeState);
+                _movementComponent.RemoteUpdate(runtimeState, renderDeltaTime, tick);
             }
 
             _lifetimeComponent.UpdateLifetime(runtimeState, hasAuthority, tick);

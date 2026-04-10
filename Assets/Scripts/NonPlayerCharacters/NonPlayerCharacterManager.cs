@@ -166,7 +166,7 @@ namespace VoidRogues.NonPlayerCharacters
 
             _localRuntimeStates[spawnParams.Index].SetPosition(spawnParams.Position);
 
-            bool hasAuthority = Runner.IsSharedModeMasterClient || Runner.GameMode == GameMode.Single;
+            bool hasAuthority = Runner.IsServer || Runner.GameMode == GameMode.Single;
             int tick = Runner.Tick;
 
             character.OnSpawned(_localRuntimeStates[spawnParams.Index], this, hasAuthority, tick);
