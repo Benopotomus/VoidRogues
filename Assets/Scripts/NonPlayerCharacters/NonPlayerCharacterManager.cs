@@ -164,7 +164,9 @@ namespace VoidRogues.NonPlayerCharacters
 
             for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
-                _localRuntimeStates[i].CopyData(ref _npcDatas.GetRef(i));
+                ref FNonPlayerCharacterData networkData = ref _npcDatas.GetRef(i);
+                if (!_localRuntimeStates[i].Data.IsEqual(ref networkData))
+                    _localRuntimeStates[i].CopyData(ref networkData);
             }
         }
 
