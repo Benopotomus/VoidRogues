@@ -4,11 +4,8 @@ using System.Collections.Generic;
 namespace VoidRogues.NonPlayerCharacters
 {
     [CreateAssetMenu(fileName = "NonPlayerCharacterDefinition", menuName = "VoidRogues/NonPlayerCharacters/NonPlayerCharacterDefinition")]
-    public class NonPlayerCharacterDefinition : ScriptableObject
+    public class NonPlayerCharacterDefinition : TableObject
     {
-        [SerializeField]
-        protected int _tableID;
-        public int TableID => _tableID;
 
         [SerializeField]
         protected string _name;
