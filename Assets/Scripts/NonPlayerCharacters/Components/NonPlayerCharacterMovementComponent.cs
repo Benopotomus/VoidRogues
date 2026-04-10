@@ -48,14 +48,14 @@ namespace VoidRogues.NonPlayerCharacters
                 _follower = followerEntity;
             }
 
-            if (_follower != null)
-            {
-                _follower.updatePosition = _followerUpdatePosition;
-                _follower.updateRotation = _followerUpdateRotation;
-                _follower.simulateMovement = _followerCanMove;
-                _follower.maxSpeed = _followerMaxSpeed;
-                _follower.Teleport(runtimeState.GetPosition(), clearPath: true);
-            }
+            if (_follower == null)
+                return;
+
+            _follower.updatePosition = _followerUpdatePosition;
+            _follower.updateRotation = _followerUpdateRotation;
+            _follower.simulateMovement = _followerCanMove;
+            _follower.maxSpeed = _followerMaxSpeed;
+            _follower.Teleport(runtimeState.GetPosition(), clearPath: true);
         }
 
         public void AuthorityUpdate(NonPlayerCharacterRuntimeState runtimeState, float renderDeltaTime, int tick)
