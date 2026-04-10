@@ -53,7 +53,7 @@ MonoBehaviour:
   RespawnTime: 0
   TimeLimit: 0
   BackfillTimeLimit: 0
-  _npcSpawnInterval: 10
+  _npcSpawnInterval: 2
   _npcSpawnRadius: 20
   _npcDefinition: {fileID: 11400000, guid: a1880e3f3b1e8804da1e97d887e424d0, type: 2}
   _npcSpawnType: 0
