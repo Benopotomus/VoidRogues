@@ -155,6 +155,19 @@ namespace VoidRogues.NonPlayerCharacters
             SpawnNPC(ref data);
         }
 
+        public override void FixedUpdateNetwork()
+        {
+            base.FixedUpdateNetwork();
+
+            if (HasStateAuthority)
+                return;
+
+            for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
+            {
+                _localRuntimeStates[i].CopyData(ref _npcDatas.GetRef(i));
+            }
+        }
+
         private void OnNonPlayerCharacterSpawned(FNonPlayerCharacterSpawnParams spawnParams, NonPlayerCharacter character)
         {
             if (verboseLogging)
