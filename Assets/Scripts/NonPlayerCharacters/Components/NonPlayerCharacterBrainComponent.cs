@@ -58,7 +58,7 @@ namespace VoidRogues.NonPlayerCharacters
 
         [SerializeField]
         private LayerMask _losLayerMask;
-        private readonly List<PlayerCharacter> _allPlayers = new List<PlayerCharacter>(16);
+        private readonly List<PlayerCharacter> _playerSearchList = new List<PlayerCharacter>(16);
 
         public void Awake()
         {
@@ -111,17 +111,17 @@ namespace VoidRogues.NonPlayerCharacters
             if (_npc == null || _npc.Context == null || _npc.Context.Runner == null)
                 return;
 
-            _allPlayers.Clear();
-            _npc.Context.Runner.GetAllBehaviours(_allPlayers);
-            if (_allPlayers.Count == 0)
+            _playerSearchList.Clear();
+            _npc.Context.Runner.GetAllBehaviours(_playerSearchList);
+            if (_playerSearchList.Count == 0)
                 return;
 
             Vector3 npcPosition = _npc.CachedTransform.position;
             float closestDistanceSqr = float.MaxValue;
 
-            for (int i = 0; i < _allPlayers.Count; i++)
+            for (int i = 0; i < _playerSearchList.Count; i++)
             {
-                var player = _allPlayers[i];
+                var player = _playerSearchList[i];
                 if (player == null || player.gameObject == null || !player.gameObject.activeInHierarchy)
                     continue;
 
