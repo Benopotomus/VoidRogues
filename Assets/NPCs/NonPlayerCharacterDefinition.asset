@@ -12,11 +12,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 91a596b24dabfd64990b1cc32c5a4de6, type: 3}
   m_Name: NonPlayerCharacterDefinition
   m_EditorClassIdentifier: 
-  _tableID: -1
+  _tableID: 1
   _name: BaseNPC
   _prefabBundle:
-    _name: 
-    _bundle: 
+    _name: NonPlayerCharacter
+    _bundle: nonplayercharacter
   _icon: {fileID: 0}
   _maxHealth: 100
   _damageReduction: 3
@@ -41,4 +41,6 @@ MonoBehaviour:
       IsBlocking: 0
       PlaybackSpeed: 0
   _tasks: []
-  _spawnTypeDataDefinitions: []
+  _spawnTypeDataDefinitions:
+  - SpawnType: 0
+    DataDefinition: {fileID: 11400000, guid: 8da353743293aa74c8e2e39fa4a91fa3, type: 2}

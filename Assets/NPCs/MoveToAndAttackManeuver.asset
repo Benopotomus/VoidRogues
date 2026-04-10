@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 147557c0126015c4bbf4f665483e9d61, type: 3}
   m_Name: MoveToAndAttackManeuver
   m_EditorClassIdentifier: 
-  ActionName: 
+  ActionName: MoveToAndAttack
   _cooldownTicks: 32
   _activationRange: {x: 0, y: 2.5}
   _attackRange: 3
@@ -20,7 +20,7 @@ MonoBehaviour:
   _faceTargetRange: 5
   _requiresLOS: 1
   _verticalAimOffset: 0
-  _validTargetDistance: {x: 0, y: 0}
+  _validTargetDistance: {x: 0, y: 30}
   _animationTriggers: []
   _hitEvents: []
   _specialEvents: []

@@ -12,3 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3b069f8a605971d40b68e309aeb3c563, type: 3}
   m_Name: GlobalTables
   m_EditorClassIdentifier: 
+  NonPlayerCharacterTable: {fileID: 11400000, guid: 72b69081ae7fae648b62a00b057a2e2f, type: 2}
