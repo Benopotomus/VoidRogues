@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterStateComponent : MonoBehaviour
     {

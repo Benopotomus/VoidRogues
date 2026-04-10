@@ -1,4 +1,4 @@
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     using UnityEngine;
 

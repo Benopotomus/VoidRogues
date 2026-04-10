@@ -1,4 +1,4 @@
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     using Fusion;
     using UnityEngine;
@@ -15,10 +15,6 @@ namespace VoidRogues
         private byte _condition; // 1 byte: NPCState (4 bits)// animation bits// Additive hit
         [FieldOffset(14)]
         private ushort _events; // 2 bytes: Health (12 bits) and storage
-        [FieldOffset(16)]
-        public byte _attitude;
-        [FieldOffset(17)]
-        public FItemData CarriedItem; // 4 bytes: Item
 
         // Total: 21 bytes
 

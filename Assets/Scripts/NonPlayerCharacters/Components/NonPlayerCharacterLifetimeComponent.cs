@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterLifetimeComponent : MonoBehaviour
     {
@@ -20,36 +20,14 @@ namespace VoidRogues
 
         public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState, int tick)
         {
-            if (!runtimeState.IsCommandedUnit())
-                return;
 
-            _lifetimeProgress = runtimeState.GetLifetimeProgress();
-            _lifetimeProgressMax = runtimeState.GetLifetimeProgressMax();
-            _nextLifetimeProgressTick = tick + runtimeState.GetTicksPerLifetime();
         }
 
         public void UpdateLifetime(NonPlayerCharacterRuntimeState runtimeState,
             bool hasAuthority,
             int tick)
         {
-            if (!runtimeState.IsCommandedUnit())
-                return;
-
-            if (tick > _nextLifetimeProgressTick)
-            {
-                _lifetimeProgress = runtimeState.GetLifetimeProgress();
-                int newlifetime = _lifetimeProgress + 1;
-
-                runtimeState.SetLifetimeProgress(newlifetime);
-                _nextLifetimeProgressTick = tick + runtimeState.GetTicksPerLifetime();
-
-                if (newlifetime >= runtimeState.GetLifetimeProgressMax())
-                {
-                    runtimeState.SetState(ENPCState.Dead);
-                }
-
-                OnLifetimeProgressChanged?.Invoke(_lifetimeProgress, _lifetimeProgressMax);
-            }
+            
         }
     }
 }

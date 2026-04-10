@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     [CreateAssetMenu(fileName = "NPCManeuver", menuName = "VoidRogues/Maneuvers/NPCManeuverDefinition", order = 1)]
     public class NonPlayerCharacterManeuverDefinition : ScriptableObject

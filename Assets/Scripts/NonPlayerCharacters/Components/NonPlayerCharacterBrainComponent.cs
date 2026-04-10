@@ -5,7 +5,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterBrainComponent : MonoBehaviour
     {

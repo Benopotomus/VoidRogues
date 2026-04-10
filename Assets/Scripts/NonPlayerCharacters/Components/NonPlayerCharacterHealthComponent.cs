@@ -1,7 +1,7 @@
 using System;
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterHealthComponent : MonoBehaviour
     {

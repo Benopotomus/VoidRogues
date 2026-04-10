@@ -1,10 +1,10 @@
-// using DWD.Pooling; // TODO: Port from LichLord
-// using DWD.Utility.Loading; // TODO: Port from LichLord
+using DWD.Pooling;
+using DWD.Utility.Loading;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterSpawner : MonoBehaviour
     {
@@ -12,7 +12,7 @@ namespace VoidRogues
 
         public void SpawnNPC(ref FNonPlayerCharacterData data, int index)
         {
-            NonPlayerCharacterDefinition definition = NonPlayerCharacterTable.TryGetDefinition(data.DefinitionID);
+            NonPlayerCharacterDefinition definition = Global.Tables.NonPlayerCharacterTable.TryGetDefinition(data.DefinitionID);
 
             if (definition == null)
             {
@@ -29,26 +29,70 @@ namespace VoidRogues
                 TeamId = data.TeamID,
             };
 
-            // TODO: Port asset bundle loading from LichLord
-            // For now, use direct prefab instantiation
-            GameObject prefab = definition.Prefab;
+            BundleObject prefabBundle = definition.PrefabBundle;
+
+            if (!prefabBundle.Ready)
+            {
+                Debug.LogWarning("Cannot load null Bundle Object! ");
+                return;
+            }
+
+            List<ILoader> LoadedBundles = AssetBundleManager.Instance.CompleteLoaders;
+
+            for (int i = 0; i < LoadedBundles.Count; i++)
+            {
+                AssetBundleLoader loadedBundle = LoadedBundles[i] as AssetBundleLoader;
+
+                if (loadedBundle.BundleName == prefabBundle.Bundle)
+                {
+                    OnPrefabLoaded(spawnParams, loadedBundle);
+                    return;
+                }
+            }
+
+            AssetBundleLoader prefabLoader = AssetBundleManager.Instance.LoadBundleObject(prefabBundle) as AssetBundleLoader;
+            NonPlayerCharacterLoader npcLoader = new NonPlayerCharacterLoader(spawnParams, prefabLoader);
+
+            if (npcLoader.Loader != null)
+            {
+                if (npcLoader.Loader.IsLoaded)
+                    OnPrefabLoaded(npcLoader);
+                else
+                    npcLoader.OnLoadComplete += OnPrefabLoaded;
+            }
+        }
+
+        private void OnPrefabLoaded(NonPlayerCharacterLoader loader)
+        {
+            loader.OnLoadComplete -= OnPrefabLoaded;
+            OnPrefabLoaded(loader.SpawnParams, loader.Loader);
+        }
+
+        private void OnPrefabLoaded(FNonPlayerCharacterSpawnParams spawnParams, AssetBundleLoader loadedBundle)
+        {
+            GameObject prefab = loadedBundle.GetAssetWithin<GameObject>();
+
             if (prefab == null)
+                return;
+
+            var poolObject = prefab.GetComponent<DWDObjectPoolObject>();
+            if (poolObject == null)
             {
-                Debug.LogWarning("Cannot spawn NPC - no prefab assigned for definition: " + definition.Name);
+                Debug.LogWarning("Could not spawn NPC " + spawnParams.DefinitionId + ". Could not find DWDObjectPoolObject Component!");
                 return;
             }
 
-            GameObject instance = UnityEngine.Object.Instantiate(prefab, spawnParams.Position, spawnParams.Rotation);
-            NonPlayerCharacter spawnedNPC = instance.GetComponent<NonPlayerCharacter>();
+            var instance = DWDObjectPool.Instance.SpawnAt(poolObject, spawnParams.Position, spawnParams.Rotation);
 
-            if (spawnedNPC == null)
+            NonPlayerCharacter spawnedProp = instance.GetComponent<NonPlayerCharacter>();
+
+            if (spawnedProp == null)
             {
-                Debug.LogWarning("NPC prefab is missing NonPlayerCharacter component!");
-                UnityEngine.Object.Destroy(instance);
+                Debug.LogWarning("NPC is Invalid, Check Bundles! (" + loadedBundle.BundleName + ")");
                 return;
             }
 
-            OnSpawned?.Invoke(spawnParams, spawnedNPC);
+            OnSpawned?.Invoke(spawnParams, spawnedProp);
         }
     }
 }

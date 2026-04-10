@@ -1,94 +1,166 @@
-using UnityEngine;
 
-namespace VoidRogues
+
+namespace VoidRogues.NonPlayerCharacters
 {
-    /// <summary>
-    /// Visual representation of a single NPC in the scene.
-    ///
-    /// Following the LichLord NonPlayerCharacter pattern, this is a local-only
-    /// MonoBehaviour (no NetworkObject).
-    /// The NonPlayerCharacterReplicator creates one instance per active NPC slot
-    /// and drives its state every render frame from the corresponding
-    /// NonPlayerCharacterRuntimeState.
-    /// </summary>
-    public class NonPlayerCharacter : CoreBehaviour
+    using DWD.Pooling;
+    using Fusion;
+    using System.Collections.Generic;
+    using UnityEngine;
+
+    public class NonPlayerCharacter : DWDObjectPoolObject //, IHitTarget, IHitInstigator, IChunkTrackable
     {
-        // Core references
         private NonPlayerCharacterRuntimeState _runtimeState;
         public NonPlayerCharacterRuntimeState RuntimeState => _runtimeState;
 
-        private NonPlayerCharacterReplicator _replicator;
-        public NonPlayerCharacterReplicator Replicator => _replicator;
+        protected NonPlayerCharacterManager _manager;
+        public NonPlayerCharacterManager Manager => _manager;
 
-        private NonPlayerCharacterDefinition _definition;
-        public NonPlayerCharacterDefinition Definition => _definition;
+        [SerializeField] private NonPlayerCharacterMovementComponent _movementComponent;
+        public NonPlayerCharacterMovementComponent Movement => _movementComponent;
 
-        // Component references (set via inspector on the NPC prefab)
-        [Header("Components")]
+        [SerializeField] private NonPlayerCharacterStateComponent _stateComponent;
+        public NonPlayerCharacterStateComponent State => _stateComponent;
+
+        [SerializeField] private NonPlayerCharacterBrainComponent _brainComponent;
+        public NonPlayerCharacterBrainComponent Brain => _brainComponent;
+
+        [SerializeField] private NonPlayerCharacterHitReactComponent _hitReactComponent;
+        public NonPlayerCharacterHitReactComponent HitReact => _hitReactComponent;
+
+        [SerializeField] private NonPlayerCharacterHealthComponent _healthComponent;
+        public NonPlayerCharacterHealthComponent Health => _healthComponent;
+
+        [SerializeField] private NonPlayerCharacterWeaponsComponent _weaponsComponent;
+        public NonPlayerCharacterWeaponsComponent Weapons => _weaponsComponent;
+
         [SerializeField] private NonPlayerCharacterAnimationController _animationController;
         public NonPlayerCharacterAnimationController AnimationController => _animationController;
 
-        [SerializeField] private NonPlayerCharacterBrainComponent _brain;
-        public NonPlayerCharacterBrainComponent Brain => _brain;
-
-        [SerializeField] private NonPlayerCharacterMovementComponent _movement;
-        public NonPlayerCharacterMovementComponent Movement => _movement;
-
-        [SerializeField] private NonPlayerCharacterStateComponent _state;
-        public NonPlayerCharacterStateComponent State => _state;
-
-        [SerializeField] private NonPlayerCharacterHealthComponent _health;
-        public NonPlayerCharacterHealthComponent Health => _health;
-
-        [SerializeField] private NonPlayerCharacterHitReactComponent _hitReact;
-        public NonPlayerCharacterHitReactComponent HitReact => _hitReact;
+        [SerializeField] private NonPlayerCharacterAttitudeComponent _attitudeComponent;
+        public NonPlayerCharacterAttitudeComponent AttitudeComponent => _attitudeComponent;
 
         [SerializeField] private NonPlayerCharacterSpawningComponent _spawningComponent;
         public NonPlayerCharacterSpawningComponent SpawningComponent => _spawningComponent;
 
-        [SerializeField] private NonPlayerCharacterWeaponsComponent _weapons;
-        public NonPlayerCharacterWeaponsComponent Weapons => _weapons;
-
-        [SerializeField] private NonPlayerCharacterLifetimeComponent _lifetime;
-        public NonPlayerCharacterLifetimeComponent Lifetime => _lifetime;
+        [SerializeField] private NonPlayerCharacterLifetimeComponent _lifetimeComponent;
+        public NonPlayerCharacterLifetimeComponent Lifetime => _lifetimeComponent;
 
         [SerializeField] private MeleeHitTrackerComponent _meleeHitTracker;
         public MeleeHitTrackerComponent MeleeHitTracker => _meleeHitTracker;
 
+        [SerializeField] private Transform _cachedTransform;
+        public Transform CachedTransform => _cachedTransform;
+
         [SerializeField] private CapsuleCollider _collider;
         public CapsuleCollider Collider => _collider;
 
-        // Cached transform shortcut (matches LichLord pattern)
-        public Transform CachedTransform => transform;
+        private SceneContext _context;
+        public SceneContext Context => _context;
 
-        // Convenience accessors
-        public SceneContext Context => _replicator != null ? _replicator.Context : null;
-        public int LocalIndex => _runtimeState != null ? _runtimeState.LocalIndex : -1;
-        public Vector3 Position => transform.position;
+        public float BonusRadius { get { return 1; } }
 
-        public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState,
-            NonPlayerCharacterReplicator replicator,
-            bool hasAuthority,
-            int tick)
+        [SerializeField]
+        private int _localIndex;
+        public int LocalIndex => _localIndex;
+
+        [SerializeField]
+        private int _fullIndex;
+        public int FullIndex => _fullIndex;
+
+        private ETeamID _teamId;
+        public ETeamID TeamID => _teamId;
+
+        public Vector3 Position => CachedTransform.position;
+        public Vector3 PredictedPosition => _cachedTransform.position + Movement.WorldVelocity;
+
+        public bool IsAttackable
         {
-            _runtimeState = runtimeState;
-            _replicator = replicator;
-            _definition = runtimeState.Definition;
-
-            transform.position = runtimeState.GetPosition();
-            transform.rotation = runtimeState.GetRotation();
-
-            gameObject.name = $"NPC_{runtimeState.FullIndex}_{(_definition != null ? _definition.Name : "Unknown")}";
+            get
+            {
+                switch (_stateComponent.CurrentState)
+                {
+                    case ENPCState.Dead:
+                    case ENPCState.Inactive:
+                        return false;
+                    default:
+                        return true;
+                }
+            }
         }
 
-        public void OnRender(NonPlayerCharacterRuntimeState renderState,
+
+        [SerializeField]
+        private int _squadId;
+
+        [SerializeField]
+        private int _formationIndex;
+
+        public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState, NonPlayerCharacterManager manager, bool hasAuthority, int tick)
+        {
+            _runtimeState = runtimeState;
+            _context = manager.Context;
+            _manager = manager;
+            _healthComponent.OnSpawned(runtimeState);
+            _movementComponent.OnSpawned(runtimeState, hasAuthority);
+            _brainComponent.OnSpawned(runtimeState, hasAuthority);
+            _carriedItemComponent.OnSpawned(runtimeState);
+            _attitudeComponent.OnSpawned(runtimeState);
+            _lifetimeComponent.OnSpawned(runtimeState, tick);
+            _spawningComponent.OnSpawned(runtimeState);
+            _stateComponent.OnSpawned(runtimeState, hasAuthority, tick);
+            _animationController.OnSpawned(runtimeState);
+
+           _fullIndex = runtimeState.FullIndex;
+
+            Context.NonPlayerCharacterManager.OnCharacterSpawned(this);
+        }
+
+        public void OnRender(NonPlayerCharacterRuntimeState runtimeState,
             bool hasAuthority,
             float renderDeltaTime,
             int tick)
         {
-            // Position
-            transform.position = renderState.GetPosition();
-            transform.rotation = renderState.GetRotation();
+            _runtimeState = runtimeState;
+
+            _healthComponent.OnRender(runtimeState, tick);
+            _stateComponent.UpdateState(runtimeState, hasAuthority, tick);
+            _carriedItemComponent.OnRender(runtimeState);
+            _attitudeComponent.OnRender(runtimeState);
+
+            _lifetimeComponent.UpdateLifetime(runtimeState, hasAuthority, tick);
+            _animationController.SyncTransformToEntity();
+            _animationController.UpdateAnimationEvents();
+            _hitReactComponent.UpdateAdditiveHitReactState(runtimeState, tick);
         }
+
+        public void StartRecycle()
+        {
+         
+            _movementComponent.StartRecycle();
+            _brainComponent.StartRecycle();
+            _stateComponent.StartRecycle();
+
+            DWDObjectPool.Instance.Recycle(this);
+
+
+            Context.NonPlayerCharacterManager.OnCharacterDespawned(this);
+        }
+
+        private NonPlayerCharacterDefinition _definition;
+        public NonPlayerCharacterDefinition GetDefinition(ref FNonPlayerCharacterData data)
+        {
+            if (data.DefinitionID == 0)
+                return null;
+
+            if (_definition == null ||
+                _definition.TableID != data.DefinitionID)
+            {
+                _definition = Global.Tables.NonPlayerCharacterTable.TryGetDefinition(data.DefinitionID);
+            }
+
+            return _definition;
+        }
+
+       
     }
 }

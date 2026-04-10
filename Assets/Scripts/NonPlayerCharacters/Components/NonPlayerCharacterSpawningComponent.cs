@@ -1,7 +1,6 @@
-// using DWD.Pooling; // TODO: Port from LichLord
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterSpawningComponent : MonoBehaviour
     {

@@ -1,0 +1,22 @@
+{
+    "name": "VoidRogues.Editor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:6ddec948fbe277149a73a3f04a89fc9a",
+        "GUID:4b761423bfdd0d644a01c908a6e87add",
+        "GUID:52aa37640dbffbc448714b68513a574c",
+        "GUID:3a71741f063360f49b190e3d4ed4f415",
+        "GUID:343deaaf83e0cee4ca978e7df0b80d21"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": true,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

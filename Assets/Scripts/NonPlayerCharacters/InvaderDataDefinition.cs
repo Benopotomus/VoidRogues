@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     [CreateAssetMenu(menuName = "VoidRogues/NonPlayerCharacters/InvaderDataDefinition")]
     public class InvaderDataDefinition : NonPlayerCharacterDataDefinition

@@ -7,7 +7,7 @@ using UnityEngine;
 // using LichLord.Projectiles; // TODO: Port from LichLord
 using System.Collections.Generic;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public partial class NonPlayerCharacterAnimationController : MonoBehaviour
     {

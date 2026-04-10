@@ -1,7 +1,7 @@
 using Pathfinding;
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterMovementComponent : MonoBehaviour
     {
@@ -43,7 +43,7 @@ namespace VoidRogues
             {
                 _follower.updatePosition = _followerUpdatePosition;
                 _follower.updateRotation = _followerUpdateRotation;
-                _follower.canMove = _followerCanMove;
+                _follower.simulateMovement = _followerCanMove;
                 _follower.maxSpeed = _followerMaxSpeed;
             }
         }
@@ -124,7 +124,7 @@ namespace VoidRogues
         {
             _followerCanMove = newCanMove;
             if (_follower != null)
-                _follower.canMove = newCanMove;
+                _follower.simulateMovement = newCanMove;
         }
 
         public void SetFollowerLocalAvoidance(bool newEnabled)

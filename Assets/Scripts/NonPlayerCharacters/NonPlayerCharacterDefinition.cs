@@ -1,7 +1,7 @@
 using UnityEngine;
 using System.Collections.Generic;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     [CreateAssetMenu(fileName = "NonPlayerCharacterDefinition", menuName = "VoidRogues/NonPlayerCharacters/NonPlayerCharacterDefinition")]
     public class NonPlayerCharacterDefinition : ScriptableObject

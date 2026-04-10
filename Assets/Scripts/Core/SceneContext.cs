@@ -7,6 +7,7 @@ namespace VoidRogues
 {
     using Fusion;
     using UnityEngine;
+    using VoidRogues.NonPlayerCharacters;
 
     [System.Serializable]
     public class SceneContext

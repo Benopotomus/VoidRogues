@@ -3,34 +3,49 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterManager : ContextBehaviour
     {
-        [SerializeField] private NonPlayerCharacterReplicator _replicatorPrefab;
-        [SerializeField] private NonPlayerCharacterDefinition[] _definitionTable;
-        [SerializeField] private LayerMask hitMask = ~0;
-        [SerializeField] private float raycastLength = 6f;
 
-        private List<NonPlayerCharacterReplicator> _replicators = new List<NonPlayerCharacterReplicator>();
+        [Serializable]
+        public struct FNPCLoadState
+        {
+            public NonPlayerCharacter NPC;
+            public ELoadState LoadState;
+        }
+
+        [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
+        private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
+
+        [SerializeField] private NonPlayerCharacterSpawner _spawner;
+
+        [SerializeField]
+        private FNPCLoadState[] _loadStates;
+        public FNPCLoadState[] LoadStates => _loadStates;
 
         public Action<NonPlayerCharacter> OnCharacterSpawned;
         public Action<NonPlayerCharacter> OnCharacterDespawned;
 
-        public void AddReplicator(NonPlayerCharacterReplicator replicator)
-        {
-            if (!_replicators.Contains(replicator))
-            {
-                _replicators.Add(replicator);
-            }
-        }
+        // Prediction
+        private Dictionary<int, NonPlayerCharacterRuntimeState> _predictedStates = new Dictionary<int, NonPlayerCharacterRuntimeState>();
+        private NonPlayerCharacterRuntimeState[] _localRuntimeStates =
+            new NonPlayerCharacterRuntimeState[NonPlayerCharacterConstants.MAX_NPC_REPS];
 
         public override void Spawned()
         {
-            // Initialize the static definition table for lookups.
-            if (_definitionTable != null)
+            base.Spawned();
+
+            Context.NonPlayerCharacterManager.AddReplicator(this);
+            _spawner.OnSpawned += OnNonPlayerCharacterSpawned;
+            _loadStates = new FNPCLoadState[NonPlayerCharacterConstants.MAX_NPC_REPS];
+
+            for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
-                NonPlayerCharacterTable.Initialize(_definitionTable);
+                int fullIndex = i + (NonPlayerCharacterConstants.MAX_NPC_REPS * Index);
+                _loadStates[i] = new FNPCLoadState();
+                _localRuntimeStates[i] = new NonPlayerCharacterRuntimeState(this, i, fullIndex);
+                _localRuntimeStates[i].CopyData(ref _npcDatas.GetRef(i));
             }
         }
 
@@ -60,17 +75,13 @@ namespace VoidRogues
             if (!Runner.IsSharedModeMasterClient && Runner.GameMode != GameMode.Single)
                 return -1;
 
-            NonPlayerCharacterReplicator replicator = GetReplicatorWithFreeSlots();
-            if (replicator == null)
+            int freeIndex = GetFreeIndex();
+            if (freeIndex == -1)
                 return -1;
 
-            int freeLocalIndex = replicator.GetFreeIndex();
-            if (freeLocalIndex == -1)
-                return -1;
-
-            int fullIndex = freeLocalIndex + (replicator.Index * NonPlayerCharacterConstants.MAX_NPC_REPS);
-            replicator.SpawnNPC(ref data, freeLocalIndex);
-            return fullIndex;
+            _npcDatas.Set(freeIndex, data);
+            _localRuntimeStates[freeIndex].CopyData(ref data);
+            return freeIndex;
         }
 
         public void SpawnNPCInvader(Vector3 spawnPos,
@@ -97,113 +108,131 @@ namespace VoidRogues
         }
 
 
-        public NonPlayerCharacterReplicator GetReplicatorForIndex(int replicatorIndex)
+        private void OnNonPlayerCharacterSpawned(FNonPlayerCharacterSpawnParams spawnParams, NonPlayerCharacter character)
         {
-            foreach (var replicator in _replicators)
-            {
-                if (replicator.Index == replicatorIndex)
-                    return replicator;
-            }
+            ref FNPCLoadState loadState = ref _loadStates[spawnParams.Index];
+            loadState.NPC = character;
+            loadState.LoadState = ELoadState.Loaded;
 
-            var newReplicator = Runner.Spawn(_replicatorPrefab, Vector3.zero, Quaternion.identity, null,
-                                onBeforeSpawned: (runner, obj) =>
-                                {
-                                    var r = obj.GetComponent<NonPlayerCharacterReplicator>();
-                                    r.Index = (byte)replicatorIndex;
-                                }
-            );
+            _localRuntimeStates[spawnParams.Index].SetPosition(spawnParams.Position);
 
-            if (newReplicator != null)
-            {
-                AddReplicator(newReplicator);
-                return newReplicator;
-            }
+            bool hasAuthority = Runner.IsSharedModeMasterClient || Runner.GameMode == GameMode.Single;
+            int tick = Runner.Tick;
 
-            return null;
+            character.OnSpawned(_localRuntimeStates[spawnParams.Index], this, hasAuthority, tick);
         }
 
-        public NonPlayerCharacterReplicator GetReplicatorWithFreeSlots()
+        public ref FNonPlayerCharacterData GetNpcData(int index)
         {
-            foreach (var replicator in _replicators)
+            return ref _npcDatas.GetRef(index);
+        }
+
+        public NonPlayerCharacter GetNpc(int index)
+        {
+            if (_loadStates[index].LoadState != ELoadState.Loaded)
+                return null;
+
+            return _loadStates[index].NPC;
+        }
+
+        public NonPlayerCharacterRuntimeState GetNpcRuntimeState(int index)
+        {
+            if (index >= _localRuntimeStates.Length)
+                return null;
+
+            return _localRuntimeStates[index];
+        }
+
+        public int GetFreeIndex()
+        {
+            for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
-                if (replicator.HasFreeIndex())
-                    return replicator;
+                if (_localRuntimeStates[i].GetStateFromData(ref _npcDatas.GetRef(i)) == ENPCState.Inactive)
+                    return i;
             }
 
-            if (_replicators.Count < NonPlayerCharacterConstants.MAX_REPLICATORS)
-            {
-                var newReplicator = Runner.Spawn(_replicatorPrefab, Vector3.zero, Quaternion.identity, null,
-                                    onBeforeSpawned: (runner, obj) =>
-                                    {
-                                        var r = obj.GetComponent<NonPlayerCharacterReplicator>();
-                                        r.Index = (byte)_replicators.Count;
-                                    }
-                );
+            return -1;
+        }
 
-                if (newReplicator != null)
+        public override void Render()
+        {
+            base.Render();
+
+            if (!Context.IsGameplayActive())
+                return;
+
+            var playerCreature = Context.LocalPlayerCharacter;
+            if (playerCreature == null)
+                return;
+
+            Vector3 viewPosition = playerCreature.transform.position;
+            float renderDeltaTime = Time.deltaTime;
+            int tick = Runner.Tick;
+            bool hasAuthority = Runner.IsSharedModeMasterClient || Runner.GameMode == GameMode.Single;
+
+            for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
+            {
+                var renderState = GetRenderState(hasAuthority, i, tick);
+                var renderStateData = renderState.Data;
+
+                bool shouldBeActive = renderState.IsActive();
+
+                ref FNPCLoadState loadState = ref _loadStates[i];
+
+                if (shouldBeActive && loadState.LoadState == ELoadState.None)
                 {
-                    AddReplicator(newReplicator);
-                    return newReplicator;
+                    loadState.LoadState = ELoadState.Loading;
+                    _spawner.SpawnNPC(ref renderStateData, i);
+                }
+                else if (shouldBeActive && loadState.LoadState == ELoadState.Loaded)
+                {
+                    loadState.NPC.OnRender(renderState,
+                        hasAuthority,
+                        renderDeltaTime,
+                        tick);
+                }
+                else if (!shouldBeActive && loadState.LoadState == ELoadState.Loaded)
+                {
+                    DespawnNPCGameObject(i);
+                }
+            }
+        }
+
+        public NonPlayerCharacterRuntimeState GetRenderState(bool hasAuthority, int index, int tick)
+        {
+            var localState = _localRuntimeStates[index];
+
+            // If we are the authority, we dont need to handle prediction
+            if (!hasAuthority)
+            {
+                // Check for predicted data
+                if (_predictedStates.TryGetValue(index, out var predictedState))
+                {
+                    if (tick < predictedState.PredictionStartTick)
+                        return localState;
+
+                    //Debug.Log("Using predicted state " + predictedState.GetState() + " Anim: " + predictedState.GetAnimationIndex() + " index: " + index);
+                    var predictedStateData = predictedState.Data;
+                    predictedStateData.Position = localState.GetPosition();
+                    predictedStateData.RawCompressedYaw = localState.GetRawCompressedYaw();
+
+                    predictedState.CopyData(ref predictedStateData);
+                    return predictedState;
                 }
             }
 
-            Debug.Log("No replicator with free slots found");
-            return null;
+            return localState;
         }
 
-        public void DespawnAllInvaders()
+        private void DespawnNPCGameObject(int index)
         {
-            if (!HasStateAuthority)
-                return;
-
-            foreach (var replicator in _replicators)
+            ref FNPCLoadState loadState = ref _loadStates[index];
+            if (loadState.LoadState == ELoadState.Loaded)
             {
-                replicator.DespawnInvaders();
+                loadState.NPC.StartRecycle();
+                loadState.LoadState = ELoadState.None;
+                loadState.NPC = null;
             }
-        }
-
-        public void SetInvaderAttitude(EAttitude newAttitude)
-        {
-            if (!HasStateAuthority)
-                return;
-
-            foreach (var replicator in _replicators)
-            {
-                replicator.SetInvaderAttitude(newAttitude);
-            }
-        }
-
-        public FNonPlayerCharacterData GetNpcDataAtIndex(int fullIndex)
-        {
-            int localIndex = fullIndex % NonPlayerCharacterConstants.MAX_NPC_REPS;
-            int replicatorIndex = fullIndex / NonPlayerCharacterConstants.MAX_NPC_REPS;
-
-            if (_replicators.Count <= replicatorIndex)
-                return new FNonPlayerCharacterData();
-
-            return _replicators[replicatorIndex].GetNpcData(localIndex);
-        }
-
-        public NonPlayerCharacterRuntimeState GetNpcRuntimeStateAtIndex(int fullIndex)
-        {
-            int localIndex = fullIndex % NonPlayerCharacterConstants.MAX_NPC_REPS;
-            int replicatorIndex = fullIndex / NonPlayerCharacterConstants.MAX_NPC_REPS;
-
-            if (_replicators.Count <= replicatorIndex)
-                return null;
-
-            return _replicators[replicatorIndex].GetNpcRuntimeState(localIndex);
-        }
-
-        public NonPlayerCharacter GetNpcAtIndex(int fullIndex)
-        {
-            int localIndex = fullIndex % NonPlayerCharacterConstants.MAX_NPC_REPS;
-            int replicatorIndex = fullIndex / NonPlayerCharacterConstants.MAX_NPC_REPS;
-
-            if (_replicators.Count <= replicatorIndex)
-                return null;
-
-            return _replicators[replicatorIndex].GetNpc(localIndex);
         }
     }
 }

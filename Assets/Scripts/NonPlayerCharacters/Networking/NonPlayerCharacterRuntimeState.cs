@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace VoidRogues
+namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterRuntimeState
     {
@@ -13,7 +13,7 @@ namespace VoidRogues
         private int _fullIndex;
         public int FullIndex => _fullIndex;
 
-        private NonPlayerCharacterReplicator _replicator;
+        private NonPlayerCharacterManager _manager;
 
         private SceneContext _context;
         public SceneContext Context => _context;
@@ -48,10 +48,10 @@ namespace VoidRogues
             }
         }
 
-        public NonPlayerCharacterRuntimeState(NonPlayerCharacterReplicator replicator, int localIndex, int fullIndex)
+        public NonPlayerCharacterRuntimeState(NonPlayerCharacterManager manager, int localIndex, int fullIndex)
         {
-            _replicator = replicator;
-            _context = replicator.Context;
+            _manager = manager;
+            _context = manager.Context;
             _localIndex = localIndex;
             _fullIndex = fullIndex;
         }
@@ -99,7 +99,7 @@ namespace VoidRogues
                 }
             }
 
-            _replicator.ReplicateRuntimeState(this);
+            _manager.ReplicateRuntimeState(this);
         }
 
         public ENPCState GetNextStateFromState(ENPCState newState)
@@ -149,7 +149,7 @@ namespace VoidRogues
                 return;
 
             DataDefinition.SetAttitude(newAttitude, ref _npcData);
-            _replicator.ReplicateRuntimeState(this);
+            _manager.ReplicateRuntimeState(this);
         }
 
         public int GetAdditiveHitReact()
@@ -163,7 +163,7 @@ namespace VoidRogues
                 return;
 
             DataDefinition.SetAdditiveHitReactIndex(newAdditiveIndex, ref _npcData);
-            _replicator.ReplicateRuntimeState(this);
+            _manager.ReplicateRuntimeState(this);
         }
 
         public ENPCState GetState()
@@ -183,7 +183,7 @@ namespace VoidRogues
                 return;
 
             DataDefinition.SetState(newState, ref _npcData);
-            _replicator.ReplicateRuntimeState(this);
+            _manager.ReplicateRuntimeState(this);
         }
 
         public int GetAnimationIndex()
@@ -194,7 +194,7 @@ namespace VoidRogues
         public void SetAnimationIndex(int index)
         {
             DataDefinition.SetAnimationIndex(index, ref _npcData);
-            _replicator.ReplicateRuntimeState(this);
+            _manager.ReplicateRuntimeState(this);
         }
 
         public Vector3 GetPosition()
@@ -255,7 +255,5 @@ namespace VoidRogues
 
             return DataDefinition.GetState(ref otherData);
         }
-
-       
     }
 }
