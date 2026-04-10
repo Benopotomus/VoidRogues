@@ -238,10 +238,7 @@ namespace VoidRogues
             if (manager == null)
                 return;
 
-            Vector3 origin = Vector3.zero;
-            var player = Context.LocalPlayerCharacter;
-            if (player != null)
-                origin = player.transform.position;
+            Vector3 origin = transform.position;
 
             Vector3 spawnPos;
             if (!GetPointOnNavmesh(origin, _npcSpawnRadius, out spawnPos))
