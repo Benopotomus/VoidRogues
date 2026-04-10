@@ -39,13 +39,26 @@ namespace VoidRogues.NonPlayerCharacters
             _lastPosition = runtimeState.GetPosition();
             _cachedTransform = transform;
             _follower = GetComponent<IAstarAI>();
-            if (_follower != null)
+            if (_follower == null)
             {
-                _follower.updatePosition = _followerUpdatePosition;
-                _follower.updateRotation = _followerUpdateRotation;
-                _follower.simulateMovement = _followerCanMove;
-                _follower.maxSpeed = _followerMaxSpeed;
+                var followerEntity = GetComponent<FollowerEntity>();
+                if (followerEntity == null)
+                    followerEntity = gameObject.AddComponent<FollowerEntity>();
+
+                _follower = followerEntity;
             }
+
+            if (_follower == null)
+            {
+                Debug.LogWarning($"[{nameof(NonPlayerCharacterMovementComponent)}] Missing IAstarAI on {name}. NPC pathfinding is disabled.");
+                return;
+            }
+
+            _follower.updatePosition = _followerUpdatePosition;
+            _follower.updateRotation = _followerUpdateRotation;
+            _follower.simulateMovement = _followerCanMove;
+            _follower.maxSpeed = _followerMaxSpeed;
+            _follower.Teleport(runtimeState.GetPosition(), clearPath: true);
         }
 
         public void AuthorityUpdate(NonPlayerCharacterRuntimeState runtimeState, float renderDeltaTime, int tick)
@@ -148,7 +161,11 @@ namespace VoidRogues.NonPlayerCharacters
 
             _moveTarget = newMoveTarget;
             if (_follower != null)
+            {
                 _follower.destination = newMoveTarget;
+                if (_follower.canSearch)
+                    _follower.SearchPath();
+            }
         }
 
         public void StartRecycle()
