@@ -6,7 +6,7 @@ using UnityEngine;
 
 namespace VoidRogues.NonPlayerCharacters
 {
-    public class NonPlayerCharacterSpawner : MonoBehaviour
+    public class NonPlayerCharacterSpawner
     {
         public Action<FNonPlayerCharacterSpawnParams, NonPlayerCharacter> OnSpawned;
 

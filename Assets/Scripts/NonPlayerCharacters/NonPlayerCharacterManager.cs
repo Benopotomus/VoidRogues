@@ -18,7 +18,7 @@ namespace VoidRogues.NonPlayerCharacters
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
 
-        [SerializeField] private NonPlayerCharacterSpawner _spawner;
+        private NonPlayerCharacterSpawner _spawner = new NonPlayerCharacterSpawner();
 
         [SerializeField]
         private FNPCLoadState[] _loadStates;
