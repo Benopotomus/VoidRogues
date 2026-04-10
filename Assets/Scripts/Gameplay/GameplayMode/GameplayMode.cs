@@ -257,11 +257,7 @@ namespace VoidRogues
             Vector3 randomPoint = center + UnityEngine.Random.insideUnitSphere * radius;
             randomPoint.y = center.y;
 
-            var constraint = NNConstraint.Default;
-            constraint.constrainWalkability = true;
-            constraint.walkable = true;
-
-            var info = AstarPath.active.GetNearest(randomPoint, constraint);
+            var info = AstarPath.active.GetNearest(randomPoint, NNConstraint.Walkable);
             if (info.node == null)
                 return false;
 
