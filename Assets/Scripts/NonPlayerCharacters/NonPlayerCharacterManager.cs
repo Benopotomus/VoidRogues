@@ -188,15 +188,14 @@ namespace VoidRogues.NonPlayerCharacters
                 return;
 
             int tick = Runner.Tick;
-            float deltaTime = Runner.DeltaTime;
 
             for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
-                UpdateNPCData(i, ref _npcDatas.GetRef(i), tick, deltaTime);
+                UpdateNPCData(i, ref _npcDatas.GetRef(i), tick);
             }
         }
 
-        private void UpdateNPCData(int index, ref FNonPlayerCharacterData data, int tick, float deltaTime)
+        private void UpdateNPCData(int index, ref FNonPlayerCharacterData data, int tick)
         {
             // Skip inactive slots.
             if (_localRuntimeStates[index].GetStateFromData(ref data) == ENPCState.Inactive)
@@ -206,7 +205,7 @@ namespace VoidRogues.NonPlayerCharacters
             if (!_views.TryGetValue(index, out var entry) || entry.LoadState != ELoadState.Loaded)
                 return;
 
-            entry.NPC.OnFixedUpdateAuthority(ref data, tick, deltaTime);
+            entry.NPC.OnFixedUpdateAuthority(ref data, tick);
         }
 
         public ref FNonPlayerCharacterData GetNpcData(int index)

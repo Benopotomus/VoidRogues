@@ -119,7 +119,7 @@ namespace VoidRogues.NonPlayerCharacters
         // Called from NonPlayerCharacterManager.FixedUpdateNetwork() on the authority/server only,
         // and only after the NPC view (GameObject) has fully spawned.
         // This is the correct place for all data-writing AI and state-machine logic.
-        public void OnFixedUpdateAuthority(ref FNonPlayerCharacterData data, int tick, float deltaTime)
+        public void OnFixedUpdateAuthority(ref FNonPlayerCharacterData data, int tick)
         {
             _brainComponent.AuthorityUpdate(tick);
             _stateComponent.FixedUpdateAuthorityState(_runtimeState, tick);
