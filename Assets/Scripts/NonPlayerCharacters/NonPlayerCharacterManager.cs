@@ -180,7 +180,7 @@ namespace VoidRogues.NonPlayerCharacters
         // Gated on the NPC view (GameObject) being fully spawned before any logic executes.
         public override void FixedUpdateNetwork()
         {
-            if (!Runner.IsForward || !Runner.IsFirstTick)
+            if (!Runner.IsForward)
                 return;
 
             if (!Context.IsGameplayActive())
