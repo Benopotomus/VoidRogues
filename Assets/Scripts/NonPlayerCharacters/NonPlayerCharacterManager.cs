@@ -204,7 +204,7 @@ namespace VoidRogues.NonPlayerCharacters
             if (!_views.TryGetValue(index, out var entry) || entry.LoadState != ELoadState.Loaded)
                 return;
 
-            entry.NPC.OnFixedUpdateAuthority(ref data, tick);
+            entry.NPC.OnFixedUpdateNetwork(ref data, tick);
         }
 
         public ref FNonPlayerCharacterData GetNpcData(int index)
@@ -259,7 +259,6 @@ namespace VoidRogues.NonPlayerCharacters
             float localDeltaTime = Time.deltaTime;
             float networkDeltaTime = Runner.DeltaTime;
             int tick = Runner.Tick;
-            bool hasAuthority = HasStateAuthority;
 
             if (!TryGetSnapshotsBuffers(out var fromBuffer, out var toBuffer, out float alpha))
                 return;
@@ -287,7 +286,7 @@ namespace VoidRogues.NonPlayerCharacters
                 else if (shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
                 {
                     // View exists and is ready – tick the visual with interpolated snapshot data.
-                    entry.NPC.OnRender(ref toData, ref fromData, alpha, renderTime, networkDeltaTime, localDeltaTime, tick, hasAuthority);
+                    entry.NPC.OnRender(ref toData, ref fromData, alpha, renderTime, networkDeltaTime, localDeltaTime, tick);
                 }
                 else if (!shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
                 {

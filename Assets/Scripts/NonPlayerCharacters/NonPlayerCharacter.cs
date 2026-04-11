@@ -95,30 +95,25 @@ namespace VoidRogues.NonPlayerCharacters
            _index = runtimeState.Index;
         }
 
+        // Called from NonPlayerCharacterManager.Render() on all peers.
+        // Reads interpolated snapshot data – no authority writes happen here.
         public void OnRender(ref FNonPlayerCharacterData toData, ref FNonPlayerCharacterData fromData,
-            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick, bool hasAuthority)
+            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick)
         {
             _runtimeState.CopyData(ref toData);
 
             _healthComponent.OnRender(_runtimeState, tick);
-            // Render is visual-only; authority data-writes happen in OnFixedUpdateAuthority.
             _stateComponent.UpdateState(_runtimeState, false, tick);
-
-            if (hasAuthority)
-                _movementComponent.AuthorityUpdate(_runtimeState, localDeltaTime, tick);
-            else
-                _movementComponent.RemoteUpdate(_runtimeState, localDeltaTime, tick);
-
+            _movementComponent.RemoteUpdate(_runtimeState, localDeltaTime, tick);
             _lifetimeComponent.UpdateLifetime(_runtimeState, false, tick);
             _animationController.SyncTransformToEntity();
             _animationController.UpdateAnimationEvents();
             _hitReactComponent.UpdateAdditiveHitReactState(_runtimeState, tick);
         }
 
-        // Called from NonPlayerCharacterManager.FixedUpdateNetwork() on the authority/server only,
-        // and only after the NPC view (GameObject) has fully spawned.
+        // Called from NonPlayerCharacterManager.FixedUpdateNetwork() after the NPC view has fully spawned.
         // This is the correct place for all data-writing AI and state-machine logic.
-        public void OnFixedUpdateAuthority(ref FNonPlayerCharacterData data, int tick)
+        public void OnFixedUpdateNetwork(ref FNonPlayerCharacterData data, int tick)
         {
             _brainComponent.AuthorityUpdate(tick);
             _stateComponent.FixedUpdateAuthorityState(_runtimeState, tick);
