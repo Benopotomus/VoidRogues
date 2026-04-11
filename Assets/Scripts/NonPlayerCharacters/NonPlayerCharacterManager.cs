@@ -173,14 +173,11 @@ namespace VoidRogues.NonPlayerCharacters
             OnCharacterSpawned?.Invoke(character);
         }
 
-        // FixedUpdateNetwork – authority/server only.
-        // Runs AI decisions and state-machine data writes for every loaded NPC slot.
+        // FixedUpdateNetwork – runs on all peers.
+        // Drives NPC simulation logic for every loaded NPC slot.
         // Gated on the NPC view (GameObject) being fully spawned before any logic executes.
         public override void FixedUpdateNetwork()
         {
-            if (!HasStateAuthority)
-                return;
-
             if (!Runner.IsForward || !Runner.IsFirstTick)
                 return;
 
@@ -201,7 +198,7 @@ namespace VoidRogues.NonPlayerCharacters
             if (_localRuntimeStates[index].GetStateFromData(ref data) == ENPCState.Inactive)
                 return;
 
-            // Gate: NPC view must be fully spawned before any authority logic runs.
+            // Gate: NPC view must be fully spawned before any logic runs.
             if (!_views.TryGetValue(index, out var entry) || entry.LoadState != ELoadState.Loaded)
                 return;
 
