@@ -259,6 +259,7 @@ namespace VoidRogues.NonPlayerCharacters
             float localDeltaTime = Time.deltaTime;
             float networkDeltaTime = Runner.DeltaTime;
             int tick = Runner.Tick;
+            bool hasAuthority = HasStateAuthority;
 
             if (!TryGetSnapshotsBuffers(out var fromBuffer, out var toBuffer, out float alpha))
                 return;
@@ -286,7 +287,7 @@ namespace VoidRogues.NonPlayerCharacters
                 else if (shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
                 {
                     // View exists and is ready – tick the visual with interpolated snapshot data.
-                    entry.NPC.OnRender(ref toData, ref fromData, alpha, renderTime, networkDeltaTime, localDeltaTime, tick);
+                    entry.NPC.OnRender(ref toData, ref fromData, alpha, renderTime, networkDeltaTime, localDeltaTime, tick, hasAuthority);
                 }
                 else if (!shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
                 {

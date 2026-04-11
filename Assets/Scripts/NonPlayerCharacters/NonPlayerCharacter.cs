@@ -96,14 +96,19 @@ namespace VoidRogues.NonPlayerCharacters
         }
 
         public void OnRender(ref FNonPlayerCharacterData toData, ref FNonPlayerCharacterData fromData,
-            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick)
+            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick, bool hasAuthority)
         {
             _runtimeState.CopyData(ref toData);
 
             _healthComponent.OnRender(_runtimeState, tick);
             // Render is visual-only; authority data-writes happen in OnFixedUpdateAuthority.
             _stateComponent.UpdateState(_runtimeState, false, tick);
-            _movementComponent.RemoteUpdate(_runtimeState, localDeltaTime, tick);
+
+            if (hasAuthority)
+                _movementComponent.AuthorityUpdate(_runtimeState, localDeltaTime, tick);
+            else
+                _movementComponent.RemoteUpdate(_runtimeState, localDeltaTime, tick);
+
             _lifetimeComponent.UpdateLifetime(_runtimeState, false, tick);
             _animationController.SyncTransformToEntity();
             _animationController.UpdateAnimationEvents();
