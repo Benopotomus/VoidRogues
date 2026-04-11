@@ -101,6 +101,7 @@ namespace VoidRogues.NonPlayerCharacters
             _runtimeState.CopyData(ref toData);
 
             _healthComponent.OnRender(_runtimeState, tick);
+            // Render is visual-only; authority data-writes happen in OnFixedUpdateAuthority.
             _stateComponent.UpdateState(_runtimeState, false, tick);
             _movementComponent.RemoteUpdate(_runtimeState, localDeltaTime, tick);
             _lifetimeComponent.UpdateLifetime(_runtimeState, false, tick);
