@@ -95,25 +95,18 @@ namespace VoidRogues.NonPlayerCharacters
            _index = runtimeState.Index;
         }
 
-        public void OnRender(NonPlayerCharacterRuntimeState runtimeState,
-            bool hasAuthority,
-            float renderDeltaTime,
-            int tick)
+        public void OnRender(ref FNonPlayerCharacterData toData, ref FNonPlayerCharacterData fromData,
+            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick)
         {
-            _runtimeState = runtimeState;
+            _runtimeState.CopyData(ref toData);
 
-            _healthComponent.OnRender(runtimeState, tick);
-            _stateComponent.UpdateState(runtimeState, hasAuthority, tick);
-
-            if (hasAuthority)
-                _movementComponent.AuthorityUpdate(runtimeState, renderDeltaTime, tick);
-            else
-                _movementComponent.RemoteUpdate(runtimeState, renderDeltaTime, tick);
-
-            _lifetimeComponent.UpdateLifetime(runtimeState, hasAuthority, tick);
+            _healthComponent.OnRender(_runtimeState, tick);
+            _stateComponent.UpdateState(_runtimeState, false, tick);
+            _movementComponent.RemoteUpdate(_runtimeState, localDeltaTime, tick);
+            _lifetimeComponent.UpdateLifetime(_runtimeState, false, tick);
             _animationController.SyncTransformToEntity();
             _animationController.UpdateAnimationEvents();
-            _hitReactComponent.UpdateAdditiveHitReactState(runtimeState, tick);
+            _hitReactComponent.UpdateAdditiveHitReactState(_runtimeState, tick);
         }
 
         // Called from NonPlayerCharacterManager.FixedUpdateNetwork() on the authority/server only,

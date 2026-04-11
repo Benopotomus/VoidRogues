@@ -28,10 +28,10 @@ namespace VoidRogues.NonPlayerCharacters
         public Action<NonPlayerCharacter> OnCharacterSpawned;
         public Action<NonPlayerCharacter> OnCharacterDespawned;
 
-        // Prediction
-        private Dictionary<int, NonPlayerCharacterRuntimeState> _predictedStates = new Dictionary<int, NonPlayerCharacterRuntimeState>();
         private NonPlayerCharacterRuntimeState[] _localRuntimeStates =
             new NonPlayerCharacterRuntimeState[NonPlayerCharacterConstants.MAX_NPC_REPS];
+
+        private ArrayReader<FNonPlayerCharacterData> _dataBufferReader;
 
         public override void Spawned()
         {
@@ -41,6 +41,8 @@ namespace VoidRogues.NonPlayerCharacters
                 Debug.Log($"[NPC Manager] Spawned on {(Runner.IsServer ? "Server" : "Client")} | Mode: {Runner.GameMode}");
 
             _spawner.OnSpawned += OnNonPlayerCharacterSpawned;
+
+            _dataBufferReader = GetArrayReader<FNonPlayerCharacterData>(nameof(_npcDatas));
 
             for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
@@ -253,19 +255,22 @@ namespace VoidRogues.NonPlayerCharacters
             if (!Context.IsGameplayActive())
                 return;
 
-            var localPlayerCharacter = Context.LocalPlayerCharacter;
-            if (localPlayerCharacter == null)
+            float renderTime = HasStateAuthority ? Runner.LocalRenderTime : Runner.RemoteRenderTime;
+            float localDeltaTime = Time.deltaTime;
+            float networkDeltaTime = Runner.DeltaTime;
+            int tick = Runner.Tick;
+
+            if (!TryGetSnapshotsBuffers(out var fromBuffer, out var toBuffer, out float alpha))
                 return;
 
-            float renderDeltaTime = Time.deltaTime;
-            int tick = Runner.Tick;
-            bool hasAuthority = HasStateAuthority || Runner.GameMode == GameMode.Single;
+            NetworkArrayReadOnly<FNonPlayerCharacterData> fromDataBuffer = _dataBufferReader.Read(fromBuffer);
+            NetworkArrayReadOnly<FNonPlayerCharacterData> toDataBuffer = _dataBufferReader.Read(toBuffer);
 
             for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
-                var renderState = GetRenderState(hasAuthority, i, tick);
-                var renderStateData = renderState.Data;
-                bool shouldBeActive = renderState.IsActive();
+                var fromData = fromDataBuffer[i];
+                var toData = toDataBuffer[i];
+                bool shouldBeActive = _localRuntimeStates[i].GetStateFromData(ref fromData) != ENPCState.Inactive;
 
                 bool hasView = _views.TryGetValue(i, out var entry);
 
@@ -276,12 +281,12 @@ namespace VoidRogues.NonPlayerCharacters
                         Debug.Log($"[NPC Manager] Requesting spawn for NPC slot {i}");
 
                     _views.Add(i, new NPCViewEntry { LoadState = ELoadState.Loading });
-                    _spawner.SpawnNPC(ref renderStateData, i);
+                    _spawner.SpawnNPC(ref fromData, i);
                 }
                 else if (shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
                 {
-                    // View exists and is ready – tick the visual.
-                    entry.NPC.OnRender(renderState, hasAuthority, renderDeltaTime, tick);
+                    // View exists and is ready – tick the visual with interpolated snapshot data.
+                    entry.NPC.OnRender(ref toData, ref fromData, alpha, renderTime, networkDeltaTime, localDeltaTime, tick);
                 }
                 else if (!shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
                 {
@@ -295,30 +300,6 @@ namespace VoidRogues.NonPlayerCharacters
                 // shouldBeActive && hasView && LoadState == Loading → still loading, nothing to do this frame.
                 // !shouldBeActive && !hasView → already clean.
             }
-        }
-
-        public NonPlayerCharacterRuntimeState GetRenderState(bool hasAuthority, int index, int tick)
-        {
-            var localState = _localRuntimeStates[index];
-
-            if (!hasAuthority)
-            {
-                if (_predictedStates.TryGetValue(index, out var predictedState))
-                {
-                    if (tick < predictedState.PredictionStartTick)
-                        return localState;
-
-                    if (verboseLogging)
-                        Debug.Log($"[NPC Manager] Using predicted state for NPC index {index}");
-
-                    var predictedStateData = predictedState.Data;
-                    predictedStateData.Position = localState.GetPosition();
-                    predictedStateData.RawCompressedYaw = localState.GetRawCompressedYaw();
-                    predictedState.CopyData(ref predictedStateData);
-                    return predictedState;
-                }
-            }
-            return localState;
         }
 
         private void ReturnView(int index, NPCViewEntry entry)
