@@ -7,6 +7,7 @@ namespace VoidRogues.Projectiles
 
     public partial class ProjectilePool : ContextBehaviour
     {
+        /*
         protected const int MAX_PROJECTILE_COUNT = 64;
 
         [Networked, Capacity(MAX_PROJECTILE_COUNT)]
@@ -399,5 +400,6 @@ namespace VoidRogues.Projectiles
             public RenderProjectile Projectile;
             public FProjectileData LastData;
         }
+        */
     }
 } 
