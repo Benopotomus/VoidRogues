@@ -27,12 +27,17 @@ namespace VoidRogues.NonPlayerCharacters
             _currentState = ENPCState.Inactive;
         }
 
+        // Called from Render() on all peers – handles visual reactions to state changes (colliders, animation triggers, follower flags).
         public void UpdateState(NonPlayerCharacterRuntimeState runtimeState, bool hasAuthority, int tick, bool forceUpdate = false)
         {
             UpdateStateChange(runtimeState, hasAuthority, tick, forceUpdate);
+        }
 
-            if (hasAuthority)
-                UpdateCurrentState(runtimeState, tick);
+        // Called from NonPlayerCharacter.OnFixedUpdateAuthority() on the authority/server only.
+        // Advances state-machine transitions that write back to networked data (e.g. Dead timer → Inactive).
+        public void FixedUpdateAuthorityState(NonPlayerCharacterRuntimeState runtimeState, int tick)
+        {
+            UpdateCurrentState(runtimeState, tick);
         }
 
         private void UpdateStateChange(NonPlayerCharacterRuntimeState runtimeState, bool hasAuthority, int tick, bool forceUpdate = false)

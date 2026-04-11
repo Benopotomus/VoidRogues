@@ -93,8 +93,6 @@ namespace VoidRogues.NonPlayerCharacters
             _animationController.OnSpawned(runtimeState);
 
            _index = runtimeState.Index;
-
-            Context.NonPlayerCharacterManager.OnCharacterSpawned?.Invoke(this);
         }
 
         public void OnRender(NonPlayerCharacterRuntimeState runtimeState,
@@ -106,16 +104,11 @@ namespace VoidRogues.NonPlayerCharacters
 
             _healthComponent.OnRender(runtimeState, tick);
             _stateComponent.UpdateState(runtimeState, hasAuthority, tick);
+
             if (hasAuthority)
-            {
                 _movementComponent.AuthorityUpdate(runtimeState, renderDeltaTime, tick);
-                _brainComponent.AuthorityUpdate(tick);
-            }
             else
-            {
-                //_brainComponent.RemoteUpdate(runtimeState);
                 _movementComponent.RemoteUpdate(runtimeState, renderDeltaTime, tick);
-            }
 
             _lifetimeComponent.UpdateLifetime(runtimeState, hasAuthority, tick);
             _animationController.SyncTransformToEntity();
@@ -123,17 +116,22 @@ namespace VoidRogues.NonPlayerCharacters
             _hitReactComponent.UpdateAdditiveHitReactState(runtimeState, tick);
         }
 
+        // Called from NonPlayerCharacterManager.FixedUpdateNetwork() on the authority/server only,
+        // and only after the NPC view (GameObject) has fully spawned.
+        // This is the correct place for all data-writing AI and state-machine logic.
+        public void OnFixedUpdateAuthority(ref FNonPlayerCharacterData data, int tick, float deltaTime)
+        {
+            _brainComponent.AuthorityUpdate(tick);
+            _stateComponent.FixedUpdateAuthorityState(_runtimeState, tick);
+        }
+
         public void StartRecycle()
         {
-         
             _movementComponent.StartRecycle();
             _brainComponent.StartRecycle();
             _stateComponent.StartRecycle();
 
             DWDObjectPool.Instance.Recycle(this);
-
-
-            Context.NonPlayerCharacterManager.OnCharacterDespawned(this);
         }
 
         private NonPlayerCharacterDefinition _definition;

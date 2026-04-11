@@ -12,8 +12,7 @@ namespace VoidRogues.NonPlayerCharacters
         [Tooltip("Enable detailed logging for NPC spawning, loading, and state changes")]
         private bool verboseLogging = false;
 
-        [Serializable]
-        public struct FNPCLoadState
+        private class NPCViewEntry
         {
             public NonPlayerCharacter NPC;
             public ELoadState LoadState;
@@ -24,10 +23,7 @@ namespace VoidRogues.NonPlayerCharacters
 
         private NonPlayerCharacterSpawner _spawner = new NonPlayerCharacterSpawner();
 
-        [SerializeField]
-        private FNPCLoadState[] _loadStates;
-
-        public FNPCLoadState[] LoadStates => _loadStates;
+        private Dictionary<int, NPCViewEntry> _views = new Dictionary<int, NPCViewEntry>(NonPlayerCharacterConstants.MAX_NPC_REPS);
 
         public Action<NonPlayerCharacter> OnCharacterSpawned;
         public Action<NonPlayerCharacter> OnCharacterDespawned;
@@ -46,17 +42,14 @@ namespace VoidRogues.NonPlayerCharacters
 
             _spawner.OnSpawned += OnNonPlayerCharacterSpawned;
 
-            _loadStates = new FNPCLoadState[NonPlayerCharacterConstants.MAX_NPC_REPS];
-
             for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
-                _loadStates[i] = new FNPCLoadState();
                 _localRuntimeStates[i] = new NonPlayerCharacterRuntimeState(this, i);
                 _localRuntimeStates[i].CopyData(ref _npcDatas.GetRef(i));
             }
 
             if (verboseLogging)
-                Debug.Log($"[NPC Manager] Initialized {_loadStates.Length} NPC slots");
+                Debug.Log($"[NPC Manager] Initialized {NonPlayerCharacterConstants.MAX_NPC_REPS} NPC slots");
         }
 
         private FNonPlayerCharacterData CreateNPCData(Vector3 spawnPos,
@@ -158,11 +151,17 @@ namespace VoidRogues.NonPlayerCharacters
         private void OnNonPlayerCharacterSpawned(FNonPlayerCharacterSpawnParams spawnParams, NonPlayerCharacter character)
         {
             if (verboseLogging)
-                Debug.Log($"[NPC Manager] NPC GameObject Spawned! Index: {spawnParams.Index} | Position: {spawnParams.Position} | NPC: {character.name}");
+                Debug.Log($"[NPC Manager] NPC GameObject Spawned! Index: {spawnParams.Index} | Position: {spawnParams.Position}");
 
-            ref FNPCLoadState loadState = ref _loadStates[spawnParams.Index];
-            loadState.NPC = character;
-            loadState.LoadState = ELoadState.Loaded;
+            // If the view entry was removed before the async load completed, discard the instantiated object.
+            if (!_views.TryGetValue(spawnParams.Index, out var entry))
+            {
+                character.StartRecycle();
+                return;
+            }
+
+            entry.NPC = character;
+            entry.LoadState = ELoadState.Loaded;
 
             _localRuntimeStates[spawnParams.Index].SetPosition(spawnParams.Position);
 
@@ -174,6 +173,42 @@ namespace VoidRogues.NonPlayerCharacters
             OnCharacterSpawned?.Invoke(character);
         }
 
+        // FixedUpdateNetwork – authority/server only.
+        // Runs AI decisions and state-machine data writes for every loaded NPC slot.
+        // Gated on the NPC view (GameObject) being fully spawned before any logic executes.
+        public override void FixedUpdateNetwork()
+        {
+            if (!HasStateAuthority)
+                return;
+
+            if (!Runner.IsForward || !Runner.IsFirstTick)
+                return;
+
+            if (!Context.IsGameplayActive())
+                return;
+
+            int tick = Runner.Tick;
+            float deltaTime = Runner.DeltaTime;
+
+            for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
+            {
+                UpdateNPCData(i, ref _npcDatas.GetRef(i), tick, deltaTime);
+            }
+        }
+
+        private void UpdateNPCData(int index, ref FNonPlayerCharacterData data, int tick, float deltaTime)
+        {
+            // Skip inactive slots.
+            if (_localRuntimeStates[index].GetStateFromData(ref data) == ENPCState.Inactive)
+                return;
+
+            // Gate: NPC view must be fully spawned before any authority logic runs.
+            if (!_views.TryGetValue(index, out var entry) || entry.LoadState != ELoadState.Loaded)
+                return;
+
+            entry.NPC.OnFixedUpdateAuthority(ref data, tick, deltaTime);
+        }
+
         public ref FNonPlayerCharacterData GetNpcData(int index)
         {
             return ref _npcDatas.GetRef(index);
@@ -181,9 +216,14 @@ namespace VoidRogues.NonPlayerCharacters
 
         public NonPlayerCharacter GetNpc(int index)
         {
-            if (_loadStates[index].LoadState != ELoadState.Loaded)
-                return null;
-            return _loadStates[index].NPC;
+            if (_views.TryGetValue(index, out var entry) && entry.LoadState == ELoadState.Loaded)
+                return entry.NPC;
+            return null;
+        }
+
+        public bool IsViewLoaded(int index)
+        {
+            return _views.TryGetValue(index, out var entry) && entry.LoadState == ELoadState.Loaded;
         }
 
         public NonPlayerCharacterRuntimeState GetNpcRuntimeState(int index)
@@ -221,7 +261,6 @@ namespace VoidRogues.NonPlayerCharacters
             if (localPlayerCharacter == null)
                 return;
 
-            Vector3 viewPosition = localPlayerCharacter.transform.position;
             float renderDeltaTime = Time.deltaTime;
             int tick = Runner.Tick;
             bool hasAuthority = HasStateAuthority || Runner.GameMode == GameMode.Single;
@@ -231,28 +270,34 @@ namespace VoidRogues.NonPlayerCharacters
                 var renderState = GetRenderState(hasAuthority, i, tick);
                 var renderStateData = renderState.Data;
                 bool shouldBeActive = renderState.IsActive();
-                
-                ref FNPCLoadState loadState = ref _loadStates[i];
 
-                if (shouldBeActive && loadState.LoadState == ELoadState.None)
+                bool hasView = _views.TryGetValue(i, out var entry);
+
+                if (shouldBeActive && !hasView)
                 {
+                    // Slot became active – request a view (async asset bundle load).
                     if (verboseLogging)
-                        Debug.Log($"[NPC Manager] Requesting spawn for NPC slot {i} (was None)");
+                        Debug.Log($"[NPC Manager] Requesting spawn for NPC slot {i}");
 
-                    loadState.LoadState = ELoadState.Loading;
+                    _views.Add(i, new NPCViewEntry { LoadState = ELoadState.Loading });
                     _spawner.SpawnNPC(ref renderStateData, i);
                 }
-                else if (shouldBeActive && loadState.LoadState == ELoadState.Loaded)
+                else if (shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
                 {
-                    loadState.NPC.OnRender(renderState, hasAuthority, renderDeltaTime, tick);
+                    // View exists and is ready – tick the visual.
+                    entry.NPC.OnRender(renderState, hasAuthority, renderDeltaTime, tick);
                 }
-                else if (!shouldBeActive && loadState.LoadState == ELoadState.Loaded)
+                else if (!shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
                 {
+                    // Slot became inactive – return the view.
                     if (verboseLogging)
                         Debug.Log($"[NPC Manager] Despawning NPC at index {i}");
 
-                    DespawnNPCGameObject(i);
+                    ReturnView(i, entry);
+                    _views.Remove(i);
                 }
+                // shouldBeActive && hasView && LoadState == Loading → still loading, nothing to do this frame.
+                // !shouldBeActive && !hasView → already clean.
             }
         }
 
@@ -280,20 +325,13 @@ namespace VoidRogues.NonPlayerCharacters
             return localState;
         }
 
-        private void DespawnNPCGameObject(int index)
+        private void ReturnView(int index, NPCViewEntry entry)
         {
-            ref FNPCLoadState loadState = ref _loadStates[index];
-
-            if (loadState.LoadState == ELoadState.Loaded)
+            if (entry.NPC != null)
             {
-                if (verboseLogging)
-                    Debug.Log($"[NPC Manager] Starting recycle/despawn for NPC at index {index} | NPC: {loadState.NPC?.name}");
-
-                loadState.NPC.StartRecycle();
-                loadState.LoadState = ELoadState.None;
-                loadState.NPC = null;
-
-                // OnCharacterDespawned?.Invoke(...); // You can re-enable if needed
+                var npc = entry.NPC;
+                npc.StartRecycle();
+                OnCharacterDespawned?.Invoke(npc);
             }
         }
     }
