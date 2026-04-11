@@ -93,47 +93,39 @@ namespace VoidRogues.NonPlayerCharacters
             _animationController.OnSpawned(runtimeState);
 
            _index = runtimeState.Index;
-
-            Context.NonPlayerCharacterManager.OnCharacterSpawned?.Invoke(this);
         }
 
-        public void OnRender(NonPlayerCharacterRuntimeState runtimeState,
-            bool hasAuthority,
-            float renderDeltaTime,
-            int tick)
+        // Called from NonPlayerCharacterManager.Render() on all peers.
+        // Reads interpolated snapshot data – no authority writes happen here.
+        public void OnRender(ref FNonPlayerCharacterData toData, ref FNonPlayerCharacterData fromData,
+            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick)
         {
-            _runtimeState = runtimeState;
+            _runtimeState.CopyData(ref toData);
 
-            _healthComponent.OnRender(runtimeState, tick);
-            _stateComponent.UpdateState(runtimeState, hasAuthority, tick);
-            if (hasAuthority)
-            {
-                _movementComponent.AuthorityUpdate(runtimeState, renderDeltaTime, tick);
-                _brainComponent.AuthorityUpdate(tick);
-            }
-            else
-            {
-                //_brainComponent.RemoteUpdate(runtimeState);
-                _movementComponent.RemoteUpdate(runtimeState, renderDeltaTime, tick);
-            }
-
-            _lifetimeComponent.UpdateLifetime(runtimeState, hasAuthority, tick);
+            _healthComponent.OnRender(_runtimeState, tick);
+            _stateComponent.UpdateState(_runtimeState, false, tick);
+            _movementComponent.RemoteUpdate(_runtimeState, localDeltaTime, tick);
+            _lifetimeComponent.UpdateLifetime(_runtimeState, false, tick);
             _animationController.SyncTransformToEntity();
             _animationController.UpdateAnimationEvents();
-            _hitReactComponent.UpdateAdditiveHitReactState(runtimeState, tick);
+            _hitReactComponent.UpdateAdditiveHitReactState(_runtimeState, tick);
+        }
+
+        // Called from NonPlayerCharacterManager.FixedUpdateNetwork() after the NPC view has fully spawned.
+        // This is the correct place for all data-writing AI and state-machine logic.
+        public void OnFixedUpdateNetwork(ref FNonPlayerCharacterData data, int tick)
+        {
+            _brainComponent.AuthorityUpdate(tick);
+            _stateComponent.FixedUpdateAuthorityState(_runtimeState, tick);
         }
 
         public void StartRecycle()
         {
-         
             _movementComponent.StartRecycle();
             _brainComponent.StartRecycle();
             _stateComponent.StartRecycle();
 
             DWDObjectPool.Instance.Recycle(this);
-
-
-            Context.NonPlayerCharacterManager.OnCharacterDespawned(this);
         }
 
         private NonPlayerCharacterDefinition _definition;
