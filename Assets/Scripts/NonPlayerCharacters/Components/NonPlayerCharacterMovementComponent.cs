@@ -59,7 +59,7 @@ namespace VoidRogues.NonPlayerCharacters
                 return;
             }
 
-            if (hasAuthority)
+            if (_hasAuthority)
             {
                 // Server/authority: run full pathfinding and RVO simulation.
                 _follower.updatePosition = _followerUpdatePosition;

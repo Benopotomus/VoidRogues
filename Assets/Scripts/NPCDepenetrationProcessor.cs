@@ -14,6 +14,15 @@ namespace VoidRogues
     /// deterministic on all peers. This eliminates the prediction/reconciliation pops
     /// that occur when using interpolated render-timeline collider objects instead.
     ///
+    /// <b>Important – physics layer design:</b>
+    /// NPC prefabs must be placed on the "NPC" physics layer (layer 6), which is intentionally
+    /// excluded from the KCC's <c>CollisionLayerMask</c> (layer 0 / Default only).
+    /// This ensures the KCC never contacts NPC physics capsules directly, so this processor
+    /// is the <em>sole</em> player-NPC separation mechanism on both server and client.
+    /// If the KCC were also doing physics-based separation, the two mechanisms would diverge
+    /// (server uses FollowerEntity-moved NPC positions; client uses stale render-interpolated
+    /// positions) and produce correction pops every time the player brushes an NPC.
+    ///
     /// Add as a prefab processor in the KCC component's Processors list on the PlayerCharacter prefab.
     /// The manager reference is resolved lazily on first use.
     /// </summary>
