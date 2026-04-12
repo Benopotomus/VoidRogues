@@ -105,10 +105,16 @@ namespace VoidRogues.NonPlayerCharacters
         public void OnFixedUpdateNetwork(ref FNonPlayerCharacterData data, int tick, bool hasAuthority)
         {
             if (hasAuthority)
+            {
                 _brainComponent.AuthorityUpdate(tick);
-
-            if (hasAuthority)
                 _movementComponent.OnFixedNetworkUpdate(ref data, tick);
+            }
+            else
+            {
+                // Non-authority peers update destination so their local RVO simulation
+                // tracks the same target as the host, keeping movement consistent.
+                _brainComponent.RemoteUpdate(tick);
+            }
         }
 
         public void StartRecycle()

@@ -58,18 +58,10 @@ namespace VoidRogues.NonPlayerCharacters
                 return;
             }
 
-            if (hasAuthority)
-            {
-                // Server drives NPC position via FollowerEntity.
-                _follower.updatePosition = _followerUpdatePosition;
-                _follower.updateRotation = _followerUpdateRotation;
-            }
-            else
-            {
-                // Clients: OnRender drives the transform from interpolated snapshot data.
-                _follower.updatePosition = false;
-                _follower.updateRotation = false;
-            }
+            // All peers run the FollowerEntity simulation (including RVO) so that
+            // client and host NPC movement stays consistent.
+            _follower.updatePosition = _followerUpdatePosition;
+            _follower.updateRotation = _followerUpdateRotation;
 
             _follower.simulateMovement = _followerCanMove;
             _follower.maxSpeed = _followerMaxSpeed;
@@ -91,16 +83,12 @@ namespace VoidRogues.NonPlayerCharacters
             if (hasAuthority)
                 return;
 
-            Vector3 fromPosition = fromData.Position;
+            // FollowerEntity drives the transform on all peers via local RVO simulation.
+            // Only snap to the authoritative network position when drift exceeds the teleport threshold.
             Vector3 toPosition = toData.Position;
-
-            if ((fromPosition - toPosition).sqrMagnitude > _teleportDistanceSquared)
+            if ((_npc.CachedTransform.position - toPosition).sqrMagnitude > _teleportDistanceSquared)
             {
-                _npc.CachedTransform.position = toPosition;
-            }
-            else
-            {
-                _npc.CachedTransform.position = Vector3.Lerp(fromPosition, toPosition, alpha);
+                _follower.Teleport(toPosition, clearPath: true);
             }
 
             UpdateYawVelocity();

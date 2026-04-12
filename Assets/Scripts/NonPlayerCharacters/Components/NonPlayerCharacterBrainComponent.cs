@@ -90,8 +90,9 @@ namespace VoidRogues.NonPlayerCharacters
             _moveTarget = Vector3.zero;
             _activeManeuver = null;
 
-            if (hasAuthority)
-                FindCurrentTargets();
+            // Find targets on all peers so the local RVO simulation has a destination
+            // from the moment the NPC spawns, keeping client and host movement in sync.
+            FindCurrentTargets();
         }
 
         public void StartRecycle()
@@ -150,6 +151,21 @@ namespace VoidRogues.NonPlayerCharacters
         }
 
         public void AuthorityUpdate(int tick)
+        {
+            if ((tick % _updateSensesTick) == 0)
+                FindCurrentTargets();
+
+            if (_targetPlayer != null && (tick % _updateDestinationTick) == 0)
+            {
+                _moveTarget = _targetPlayer.transform.position;
+                if (_npc != null && _npc.Movement != null)
+                    _npc.Movement.SetMoveTargetPosition(_moveTarget);
+            }
+        }
+
+        // Mirrors AuthorityUpdate for non-authority peers so that the local RVO
+        // simulation targets the same destination as the host each tick.
+        public void RemoteUpdate(int tick)
         {
             if ((tick % _updateSensesTick) == 0)
                 FindCurrentTargets();
