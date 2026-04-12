@@ -185,22 +185,70 @@ namespace VoidRogues.NonPlayerCharacters
         }
 
 
+        // Fallback speed when the NPC definition cannot be looked up at integration time.
+        private const float DefaultWalkSpeed = 5f;
+
         // FIXED UPDATE NETWORK
         public override void FixedUpdateNetwork()
         {
-            Debug.Log("Fised Update Network");
-
             if (!Context.IsGameplayActive())
                 return;
 
+            bool hasAuthority = HasStateAuthority || Runner.GameMode == GameMode.Single;
+            float deltaTime = Runner.DeltaTime;
             int tick = Runner.Tick;
 
-            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            // ----------------------------------------------------------------
+            // Phase 1 – Deterministic position integration (runs on all peers).
+            //
+            // This is the "hard path": both server and all clients integrate NPC
+            // positions using the yaw and isMoving flag stored in the replicated
+            // FNonPlayerCharacterData array.  Because Fusion restores that array
+            // to the correct historical snapshot before every resimulated tick,
+            // both peers always compute the same new positions.
+            //
+            // NPCDepenetrationProcessor reads from this same array during KCC
+            // resimulation, so it now sees deterministic, consistent positions on
+            // every peer — eliminating the correction pops that occurred when
+            // FollowerEntity-driven NPC transforms diverged between server and client.
+            // ----------------------------------------------------------------
+            for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
-                if (pair.Value.LoadState != ELoadState.Loaded)
+                ref FNonPlayerCharacterData data = ref _npcDatas.GetRef(i);
+
+                if (data.DefinitionID == 0)
                     continue;
 
-                pair.Value.NPC.OnFixedUpdateNetwork(ref _npcDatas.GetRef(pair.Key), tick);
+                ENPCState state = data.State;
+                if (state == ENPCState.Dead || state == ENPCState.Inactive)
+                    continue;
+
+                if (!data.IsMoving)
+                    continue;
+
+                // YawToDirection: yaw (degrees) → unit XZ vector, matching FWorldTransform conventions.
+                float yawRad = data.Yaw * Mathf.Deg2Rad;
+                Vector3 dir = new Vector3(Mathf.Sin(yawRad), 0f, Mathf.Cos(yawRad));
+
+                float speed = data.Definition != null ? data.Definition.WalkSpeed : DefaultWalkSpeed;
+                data.Position += dir * (speed * deltaTime);
+            }
+
+            // ----------------------------------------------------------------
+            // Phase 2 – AI / brain updates and steering refresh (loaded views only).
+            //
+            // The server reads FollowerEntity's steeringTarget here and writes back
+            // the updated yaw / isMoving for Phase 1 to consume next tick.
+            // Clients skip the steering write (UpdateSteering is a no-op when !hasAuthority)
+            // and only run lightweight local state.
+            // ----------------------------------------------------------------
+            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            {
+                NPCViewEntry entry = pair.Value;
+                if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
+                    continue;
+
+                entry.NPC.OnFixedUpdateNetwork(ref _npcDatas.GetRef(pair.Key), tick, hasAuthority, deltaTime);
             }
         }
 

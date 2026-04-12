@@ -1,153 +1,187 @@
 using Pathfinding;
-using TMPro;
 using UnityEngine;
 
 namespace VoidRogues.NonPlayerCharacters
 {
+    /// <summary>
+    /// Handles NPC locomotion under the "deterministic rollback" model.
+    ///
+    /// <b>Hard-path design</b><br/>
+    /// Rather than letting FollowerEntity move the transform directly (which runs in Unity's
+    /// Update loop, outside Fusion's tick loop), we keep FollowerEntity alive only as a
+    /// <em>path oracle</em>: it still computes A* paths and provides
+    /// <see cref="IAstarAI.steeringTarget"/>, but never writes to the transform.
+    ///
+    /// The actual position integration happens in
+    /// <see cref="NonPlayerCharacterManager.FixedUpdateNetwork"/> Phase 1, which runs on
+    /// <em>every peer</em> (server and all clients) during Fusion's tick loop.  Because
+    /// Fusion restores the <see cref="FNonPlayerCharacterData"/> array to the correct
+    /// historical snapshot before each resimulated tick, both peers compute identical
+    /// positions: the stored yaw + isMoving flag are the sole inputs.
+    ///
+    /// The server updates yaw and isMoving from FollowerEntity every tick in
+    /// <see cref="UpdateSteering"/>. Clients get these values via normal Fusion snapshot
+    /// replication and never need to run pathfinding.
+    ///
+    /// As a result <see cref="NPCDepenetrationProcessor"/> reads fully deterministic NPC
+    /// positions during KCC resimulation, eliminating the correction pops that occurred
+    /// when RVO-moved NPC transforms diverged between server and client.
+    /// </summary>
     public class NonPlayerCharacterMovementComponent : MonoBehaviour
     {
+        // Distance (squared) beyond which position changes are teleports rather than interpolation.
+        private float _teleportDistanceSquared = 36f;
+
+        // Minimum distance to the steering target before the NPC is considered to have arrived.
+        private const float ArrivalThreshold = 0.15f;
+
         private NonPlayerCharacter _npc;
-
         private IAstarAI _follower;
-        public IAstarAI AIFollower => _follower;
-
-        [SerializeField] private Vector3 _worldVelocity;
-        public Vector3 WorldVelocity => _worldVelocity;
-
-        [SerializeField] private bool _isGrounded;
-        public bool IsGrounded => _isGrounded;
-
-        [SerializeField] private LayerMask _layerMask;
-
-        private Vector3 _lastPosition;
-        private Vector3 _localVelocity;
-        private float _lastYaw;
-        private float _yawVelocity;
-
-        bool _followerUpdatePosition = true;
-        bool _followerUpdateRotation = true;
-        bool _followerLocalAvoidance = true;
-        bool _followerCanMove = true;
-        float _followerMaxSpeed = 5f;
-
         private Transform _cachedTransform;
 
-        private float _teleportDistanceSquared = 36;
+        // Used only for render-side yaw velocity (animation blending).
+        private float _lastYaw;
+        private float _yawVelocity;
+        public float YawVelocity => _yawVelocity;
+
+        private Vector3 _moveTarget;
+
+        public IAstarAI AIFollower => _follower;
+
+        // -------------------------------------------------------------------
+        // LIFECYCLE
+        // -------------------------------------------------------------------
 
         public void OnSpawned(ref FNonPlayerCharacterData data, bool hasAuthority)
         {
             _npc = GetComponent<NonPlayerCharacter>();
-
-            _lastPosition = data.Position;
             _cachedTransform = transform;
+
             _follower = GetComponent<IAstarAI>();
             if (_follower == null)
             {
                 var followerEntity = GetComponent<FollowerEntity>();
                 if (followerEntity == null)
                     followerEntity = gameObject.AddComponent<FollowerEntity>();
-
                 _follower = followerEntity;
             }
 
             if (_follower == null)
             {
                 Debug.LogWarning($"[{nameof(NonPlayerCharacterMovementComponent)}] Missing IAstarAI on {name}. NPC pathfinding is disabled.");
-                return;
             }
+            else
+            {
+                // On all peers: FollowerEntity must never write back to the transform.
+                // The transform is driven by FixedUpdateNetwork (simulation) or OnRender (visuals).
+                _follower.updatePosition = false;
+                _follower.updateRotation = false;
 
-            _follower.updatePosition = _followerUpdatePosition;
-            _follower.updateRotation = _followerUpdateRotation;
-            _follower.simulateMovement = _followerCanMove;
-            _follower.maxSpeed = _followerMaxSpeed;
-            _follower.Teleport(data.Position, clearPath: true);
+                if (hasAuthority)
+                {
+                    // Server: keep the path simulation alive so steeringTarget stays fresh.
+                    _follower.simulateMovement = true;
+                }
+                else
+                {
+                    // Clients: no path queries needed – yaw/isMoving come from the server snapshot.
+                    _follower.simulateMovement = false;
+                }
+
+                _follower.Teleport(data.Position, clearPath: true);
+            }
         }
 
-        public void OnFixedNetworkUpdate(ref FNonPlayerCharacterData data, int tick)
+        public void StartRecycle()
         {
-            //UpdateVelocity(renderDeltaTime);
-            UpdateYawVelocity();
-            //_npc.AnimationController.UpdateAnimatonForMovement(runtimeState, _localVelocity, _yawVelocity, renderDeltaTime);
-            // TODO: Port TryWriteTransformData from LichLord
-            data.Position = _npc.CachedTransform.position;
+            if (_follower != null)
+            {
+                _follower.updatePosition = false;
+                _follower.updateRotation = false;
+                _follower.simulateMovement = false;
+                _follower.destination = Vector3.zero;
+            }
+            _follower = null;
+            _moveTarget = Vector3.zero;
         }
 
+        // -------------------------------------------------------------------
+        // SIMULATION  (called from NonPlayerCharacter.OnFixedUpdateNetwork)
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Server-only: reads FollowerEntity's current <see cref="IAstarAI.steeringTarget"/>,
+        /// derives a movement yaw angle and updates <see cref="FNonPlayerCharacterData.IsMoving"/>
+        /// and <see cref="FNonPlayerCharacterData.Yaw"/> in the networked struct.
+        ///
+        /// These two values are replicated to clients and used by Phase 1 of
+        /// <see cref="NonPlayerCharacterManager.FixedUpdateNetwork"/> on all peers to integrate
+        /// position deterministically.
+        ///
+        /// Must be called <em>after</em> Phase 1 has already integrated
+        /// <see cref="FNonPlayerCharacterData.Position"/> so that the transform is synced to the
+        /// post-integration position before FollowerEntity reads it.
+        /// </summary>
+        public void UpdateSteering(ref FNonPlayerCharacterData data, bool hasAuthority)
+        {
+            if (!hasAuthority)
+                return;
+
+            if (_follower == null)
+                return;
+
+            // Sync the transform so FollowerEntity's next Update sees the simulation position.
+            _cachedTransform.position = data.Position;
+
+            // steeringTarget is the next waypoint produced by A*.
+            Vector3 toTarget = _follower.steeringTarget - data.Position;
+            toTarget.y = 0f;
+            float dist = toTarget.magnitude;
+
+            bool isMoving = dist > ArrivalThreshold;
+            data.IsMoving = isMoving;
+
+            if (isMoving)
+            {
+                // Store the movement direction as a yaw angle (degrees, 0–360).
+                // Clients decode this with YawToDirection() in the integration phase.
+                Vector3 dir = toTarget / dist;
+                data.Yaw = Mathf.Atan2(dir.x, dir.z) * Mathf.Rad2Deg;
+            }
+        }
+
+        // -------------------------------------------------------------------
+        // RENDER  (called from NonPlayerCharacter.OnRender)
+        // -------------------------------------------------------------------
+
+        /// <summary>
+        /// Interpolates the transform position between two confirmed snapshots for visual
+        /// smoothness.  Runs on all peers but only moves the transform on non-authority clients;
+        /// the server's transform is managed by <see cref="UpdateSteering"/>.
+        /// </summary>
         public void OnRender(ref FNonPlayerCharacterData toData, ref FNonPlayerCharacterData fromData,
-                   float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick, bool hasAuthority)
-        { 
-            if(hasAuthority)
-                return; 
+            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick, bool hasAuthority)
+        {
+            if (hasAuthority)
+                return;
 
             Vector3 fromPosition = fromData.Position;
             Vector3 toPosition = toData.Position;
 
-            if ((fromPosition - toPosition).sqrMagnitude > _teleportDistanceSquared)
-            {
-                _npc.CachedTransform.position = toPosition;
-            }
-            else
-            {
-                _npc.CachedTransform.position  = Vector3.Lerp(fromPosition, toPosition, alpha);
-            }
+            _cachedTransform.position = (fromPosition - toPosition).sqrMagnitude > _teleportDistanceSquared
+                ? toPosition
+                : Vector3.Lerp(fromPosition, toPosition, alpha);
 
-                //UpdateVelocity(renderDeltaTime);
-                UpdateYawVelocity();
-            //_npc.AnimationController.UpdateAnimatonForMovement(runtimeState, _localVelocity, _yawVelocity, renderDeltaTime);
+            UpdateYawVelocity();
         }
 
-        private void UpdateVelocity(float renderDeltaTime)
-        {
-            _worldVelocity = ((_npc.CachedTransform.position - _lastPosition) / renderDeltaTime);
-            _lastPosition = _npc.CachedTransform.position;
-            _localVelocity = _npc.CachedTransform.InverseTransformDirection(_worldVelocity);
-        }
+        // -------------------------------------------------------------------
+        // BRAIN INTERFACE  (called from NonPlayerCharacterBrainComponent)
+        // -------------------------------------------------------------------
 
-        private void UpdateYawVelocity()
-        {
-            Vector3 forward = _npc.CachedTransform.forward;
-            float currentYaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
-            _yawVelocity = currentYaw - _lastYaw;
-            _lastYaw = currentYaw;
-        }
-
-        public void SetFollowerUpdatePosition(bool newEnabled)
-        {
-            _followerUpdatePosition = newEnabled;
-            if (_follower != null)
-                _follower.updatePosition = newEnabled;
-        }
-
-        public void SetFollowerUpdateRotation(bool newEnabled)
-        {
-            _followerUpdateRotation = newEnabled;
-            if (_follower != null)
-                _follower.updateRotation = newEnabled;
-        }
-
-        public void SetFollowerCanMove(bool newCanMove)
-        {
-            _followerCanMove = newCanMove;
-            if (_follower != null)
-                _follower.simulateMovement = newCanMove;
-        }
-
-        public void SetFollowerLocalAvoidance(bool newEnabled)
-        {
-            _followerLocalAvoidance = newEnabled;
-        }
-
-        public void SetFollowerMaxSpeed(float newSpeed)
-        {
-            _followerMaxSpeed = newSpeed;
-            if (_follower != null)
-                _follower.maxSpeed = newSpeed;
-        }
-
-        private Vector3 _moveTarget;
         public void SetMoveTargetPosition(Vector3 newMoveTarget)
         {
-            Vector3 delta = _moveTarget - newMoveTarget;
-            if (delta.sqrMagnitude < 0.01f)
+            if ((_moveTarget - newMoveTarget).sqrMagnitude < 0.01f)
                 return;
 
             _moveTarget = newMoveTarget;
@@ -159,26 +193,58 @@ namespace VoidRogues.NonPlayerCharacters
             }
         }
 
-        public void StartRecycle()
+        // -------------------------------------------------------------------
+        // STATE COMPONENT INTERFACE  (may be called by NonPlayerCharacterStateComponent)
+        // -------------------------------------------------------------------
+
+        public void SetFollowerCanMove(bool newCanMove)
         {
-            SetFollowerUpdatePosition(false);
-            SetFollowerUpdateRotation(false);
-            SetFollowerCanMove(false);
-            SetMoveTargetPosition(Vector3.zero);
-            SetFollowerLocalAvoidance(false);
-            _follower = null;
+            if (_follower != null)
+                _follower.simulateMovement = newCanMove;
         }
 
-        public void OnStateAuthorityChanged(bool hasAuthority)
+        public void SetFollowerUpdatePosition(bool newEnabled)
         {
-            SetFollowerUpdatePosition(true);
-            SetFollowerUpdateRotation(true);
-            SetFollowerCanMove(true);
+            // In the deterministic model updatePosition is always false; expose the
+            // setter so that commented state-machine code can be re-enabled unchanged.
+            if (_follower != null)
+                _follower.updatePosition = newEnabled;
+        }
+
+        public void SetFollowerUpdateRotation(bool newEnabled)
+        {
+            if (_follower != null)
+                _follower.updateRotation = newEnabled;
+        }
+
+        public void SetFollowerLocalAvoidance(bool newEnabled)
+        {
+            // RVO local-avoidance is not used in the deterministic model.
+            // Kept so call-sites in commented state-machine code compile unchanged.
+        }
+
+        public void SetFollowerMaxSpeed(float newSpeed)
+        {
+            if (_follower != null)
+                _follower.maxSpeed = newSpeed;
         }
 
         public void SetRVOSettings(bool locked, float priority = 0.5f)
         {
-            // TODO: Port RVO settings from LichLord (requires FollowerEntity)
+            // RVO is not used in the deterministic model.
+        }
+
+        // -------------------------------------------------------------------
+        // HELPERS
+        // -------------------------------------------------------------------
+
+        private void UpdateYawVelocity()
+        {
+            Vector3 forward = _cachedTransform.forward;
+            float currentYaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
+            _yawVelocity = currentYaw - _lastYaw;
+            _lastYaw = currentYaw;
         }
     }
 }
+

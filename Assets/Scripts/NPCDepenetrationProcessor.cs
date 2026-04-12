@@ -9,10 +9,24 @@ namespace VoidRogues
     /// active NPC by reading positions directly from the server-authoritative
     /// <see cref="NonPlayerCharacterManager"/> networked struct array.
     ///
-    /// Because NPC positions come from a <c>[Networked]</c> array that Fusion restores to
-    /// the correct historical tick during re-simulation, the corrections are fully
-    /// deterministic on all peers. This eliminates the prediction/reconciliation pops
-    /// that occur when using interpolated render-timeline collider objects instead.
+    /// <b>Why this is now fully deterministic</b><br/>
+    /// NPC positions in <c>FNonPlayerCharacterData.Position</c> are written exclusively
+    /// inside <c>NonPlayerCharacterManager.FixedUpdateNetwork</c> (Phase 1), which runs
+    /// on every peer during Fusion's tick loop — including resimulated ticks on clients.
+    /// Because Fusion restores the <c>[Networked]</c> array to the correct historical
+    /// snapshot before each resimulated tick, Phase 1 integrates from the same starting
+    /// state and produces the same positions on server and client alike.
+    ///
+    /// This processor therefore reads consistent, deterministic NPC positions whenever
+    /// the KCC calls it during a resimulated move step, eliminating the prediction pops
+    /// that occurred in the previous model where FollowerEntity (running in Unity's Update
+    /// loop) moved NPCs outside Fusion's tick loop.
+    ///
+    /// <b>Physics layer design:</b>
+    /// NPC prefabs must be placed on the "NPC" physics layer (layer 6), which is intentionally
+    /// excluded from the KCC's <c>CollisionLayerMask</c> (layer 0 / Default only).
+    /// This ensures the KCC never contacts NPC physics capsules directly, so this processor
+    /// is the <em>sole</em> player-NPC separation mechanism on both server and client.
     ///
     /// Add as a prefab processor in the KCC component's Processors list on the PlayerCharacter prefab.
     /// The manager reference is resolved lazily on first use.
