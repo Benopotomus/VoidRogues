@@ -304,7 +304,7 @@ MonoBehaviour:
       collidesWith: -1
       priority: 0.5
       debug: 0
-      locked: 0
+      locked: 1
     pathfindingSettings:
       graphMask:
         value: -1
@@ -343,7 +343,7 @@ MonoBehaviour:
       - 1
       - 1
       tagEntryCosts: 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-    enableLocalAvoidance: 0
+    enableLocalAvoidance: 1
     enableGravity: 1
   managedSettings:
     pathfindingSettings:
