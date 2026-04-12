@@ -14,8 +14,8 @@ namespace VoidRogues
     /// deterministic on all peers. This eliminates the prediction/reconciliation pops
     /// that occur when using interpolated render-timeline collider objects instead.
     ///
-    /// Add as a local processor via <see cref="KCC.AddLocalProcessor"/> and call
-    /// <see cref="Initialize"/> from <see cref="PlayerCharacter.Spawned"/>.
+    /// Add as a prefab processor in the KCC component's Processors list on the PlayerCharacter prefab.
+    /// The manager reference is resolved lazily on first use.
     /// </summary>
     public class NPCDepenetrationProcessor : KCCProcessor, IAfterMoveStep
     {
@@ -41,21 +41,22 @@ namespace VoidRogues
         private int _maxIterations = 3;
 
         private NonPlayerCharacterManager _npcManager;
-
-        /// <summary>
-        /// Wire up the NPC manager. Call this from <see cref="PlayerCharacter.Spawned"/>.
-        /// </summary>
-        public void Initialize(NonPlayerCharacterManager manager)
-        {
-            _npcManager = manager;
-        }
+        private bool _managerSearched;
 
         // IAfterMoveStep INTERFACE
 
         public void Execute(AfterMoveStep stage, KCC kcc, KCCData data)
         {
             if (_npcManager == null)
-                return;
+            {
+                if (_managerSearched)
+                    return;
+
+                _managerSearched = true;
+                _npcManager = Object.FindFirstObjectByType<NonPlayerCharacterManager>();
+                if (_npcManager == null)
+                    return;
+            }
 
             float kccRadius  = kcc.Settings.Radius;
             float kccHeight  = kcc.Settings.Height;
