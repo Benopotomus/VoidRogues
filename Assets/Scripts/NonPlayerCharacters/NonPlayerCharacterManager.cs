@@ -249,7 +249,6 @@ namespace VoidRogues.NonPlayerCharacters
                     // forward-prediction ticks, reducing player-correction pops.
                     Vector3 prevPos = data.Position;
                     entry.NPC.OnFixedUpdateNetwork(ref data, tick, hasAuthority);
-                    data.Velocity = (data.Position - prevPos) * invDeltaTime;
                 }
                 else
                 {

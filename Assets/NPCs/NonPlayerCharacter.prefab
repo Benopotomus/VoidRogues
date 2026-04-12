@@ -267,7 +267,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   version: 1073741839
   shape:
-    radius: 0.5
+    radius: 0.75
     height: 2
   movement:
     follower:
@@ -281,7 +281,7 @@ MonoBehaviour:
       leadInRadiusWhenApproachingDestination: 1
       allowRotatingOnSpotBacking: 1
     debugFlags: 64
-    stopDistance: 1.0
+    stopDistance: 1
     rotationSmoothing: 0
     positionSmoothing: 0
     groundMask:

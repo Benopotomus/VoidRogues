@@ -15,6 +15,12 @@ namespace VoidRogues
 
         [SerializeField] private Vector3 _fallbackSpawnPosition = new Vector3(1000, 0, 1000);
 
+        public override void Spawned()
+        {
+            base.Spawned();
+            _spawnPoints = FindObjectsByType<PlayerSpawnPoint>( FindObjectsSortMode.None);
+        }
+
         public override void Despawned(NetworkRunner runner, bool hasState)
         {
             // Clear reference to avoid UI access after despawn

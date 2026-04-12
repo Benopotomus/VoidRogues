@@ -15,10 +15,6 @@ namespace VoidRogues.NonPlayerCharacters
         private byte _condition; // 1 byte: NPCState (4 bits)// animation bits// Additive hit
         [FieldOffset(14)]
         private ushort _events; // 2 bytes: Health (12 bits) and storage
-        [FieldOffset(16)]
-        private short _velocityX; // 2 bytes: XZ velocity X (units/s × 1000, range ±32.767)
-        [FieldOffset(18)]
-        private short _velocityZ; // 2 bytes: XZ velocity Z (units/s × 1000, range ±32.767)
         // Byte 20: padding
 
         // Total: 21 bytes
@@ -139,29 +135,12 @@ namespace VoidRogues.NonPlayerCharacters
             set => _events = value;
         }
 
-        /// <summary>
-        /// XZ-plane velocity (units/s) captured by the server each tick and replicated to clients.
-        /// Used by <see cref="NPCDepenetrationProcessor"/> to extrapolate NPC positions during
-        /// client-side forward-prediction ticks, reducing player-correction pops.
-        /// </summary>
-        public Vector3 Velocity
-        {
-            get => new Vector3(_velocityX / 1000f, 0f, _velocityZ / 1000f);
-            set
-            {
-                _velocityX = (short)Mathf.Clamp(Mathf.RoundToInt(value.x * 1000f), short.MinValue, short.MaxValue);
-                _velocityZ = (short)Mathf.Clamp(Mathf.RoundToInt(value.z * 1000f), short.MinValue, short.MaxValue);
-            }
-        }
-
         public void Copy(FNonPlayerCharacterData other)
         {
             _transform = other._transform;
             _condition = other._condition;
             _configuration = other._configuration;
             _events = other._events;
-            _velocityX = other._velocityX;
-            _velocityZ = other._velocityZ;
         }
 
         public void Copy(ref FNonPlayerCharacterData other)
@@ -170,8 +149,6 @@ namespace VoidRogues.NonPlayerCharacters
             _condition = other._condition;
             _configuration = other._configuration;
             _events = other._events;
-            _velocityX = other._velocityX;
-            _velocityZ = other._velocityZ;
         }
 
         public bool IsEqual(ref FNonPlayerCharacterData other)
