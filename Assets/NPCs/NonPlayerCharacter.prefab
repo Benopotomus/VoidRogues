@@ -294,7 +294,7 @@ MonoBehaviour:
       obstacleTimeHorizon: 0.5
       maxNeighbours: 10
       layer: 1
-      collidesWith: 1
+      collidesWith: 5
       priority: 0.5
       debug: 0
       locked: 0
@@ -384,7 +384,7 @@ MonoBehaviour:
     obstacleTimeHorizon: 0.5
     maxNeighbours: 10
     layer: 1
-    collidesWith: 1
+    collidesWith: 5
     priority: 0.5
     debug: 0
     locked: 0
