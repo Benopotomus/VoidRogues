@@ -26,8 +26,6 @@ namespace VoidRogues
         // PRIVATE MEMBERS
 
         private KCC _kcc;
-        private NoGravityXZMovementProcessor _noGravityProcessor;
-        private NPCDepenetrationProcessor _npcDepenetrationProcessor;
 
         // NetworkBehaviour INTERFACE
 
@@ -39,18 +37,8 @@ namespace VoidRogues
             // Link back to the owning PlayerEntity
             OwningPlayer = PlayerEntity.GetPlayerEntity(Runner, Object.InputAuthority);
 
-            // Disable gravity and lock vertical axis via a custom KCC processor
-            _noGravityProcessor = gameObject.AddComponent<NoGravityXZMovementProcessor>();
-            _kcc.AddLocalProcessor(_noGravityProcessor);
-
-            // Analytic NPC depenetration — reads positions from the networked struct array
-            // so corrections are deterministic across prediction ticks (no reconciliation pops).
-            _npcDepenetrationProcessor = gameObject.AddComponent<NPCDepenetrationProcessor>();
-            _kcc.AddLocalProcessor(_npcDepenetrationProcessor);
-            if (Context?.NonPlayerCharacterManager != null)
-                _npcDepenetrationProcessor.Initialize(Context.NonPlayerCharacterManager);
-
-            // Immediately zero out any gravity on the KCC data to prevent a single-frame drop
+            // Immediately zero out any gravity on the KCC data to prevent a single-frame drop.
+            // NoGravityXZMovementProcessor (in KCC Settings.Processors) handles ongoing suppression.
             _kcc.FixedData.Gravity = Vector3.zero;
             _kcc.RenderData.Gravity = Vector3.zero;
             _kcc.FixedData.DynamicVelocity = Vector3.zero;
