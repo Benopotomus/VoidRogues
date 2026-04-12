@@ -1,3 +1,5 @@
+using Pathfinding;
+
 namespace VoidRogues
 {
     using Fusion;
@@ -43,6 +45,18 @@ namespace VoidRogues
             _kcc.RenderData.Gravity = Vector3.zero;
             _kcc.FixedData.DynamicVelocity = Vector3.zero;
             _kcc.RenderData.DynamicVelocity = Vector3.zero;
+
+            // The player prefab carries a FollowerEntity configured as a locked RVO obstacle
+            // (enableLocalAvoidance=true, locked=true in the prefab).  The KCC owns the transform,
+            // so prevent FollowerEntity from applying any computed movement back to the transform.
+            // syncPosition=true (prefab) keeps the RVO agent's internal position in sync with the
+            // KCC-driven transform, so NPC agents see the player at the correct world position.
+            var follower = GetComponent<FollowerEntity>();
+            if (follower != null)
+            {
+                follower.updatePosition = false;
+                follower.updateRotation = false;
+            }
 
             if (HasInputAuthority && Context != null)
             {

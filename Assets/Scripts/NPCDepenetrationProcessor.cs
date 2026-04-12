@@ -9,18 +9,16 @@ namespace VoidRogues
     /// active NPC by reading positions directly from the server-authoritative
     /// <see cref="NonPlayerCharacterManager"/> networked struct array.
     ///
-    /// <b>Why this is now fully deterministic</b><br/>
-    /// NPC positions in <c>FNonPlayerCharacterData.Position</c> are written exclusively
-    /// inside <c>NonPlayerCharacterManager.FixedUpdateNetwork</c> (Phase 1), which runs
-    /// on every peer during Fusion's tick loop — including resimulated ticks on clients.
-    /// Because Fusion restores the <c>[Networked]</c> array to the correct historical
-    /// snapshot before each resimulated tick, Phase 1 integrates from the same starting
-    /// state and produces the same positions on server and client alike.
+    /// <b>Determinism and forward-prediction</b><br/>
+    /// NPC positions in <c>FNonPlayerCharacterData.Position</c> are server-authoritative and
+    /// replicated via Fusion's snapshot system.  During KCC resimulation on a client, Fusion
+    /// restores <c>_npcDatas</c> to the correct historical snapshot before each resimulated tick,
+    /// so this processor reads the same positions the server used — no correction pops.
     ///
-    /// This processor therefore reads consistent, deterministic NPC positions whenever
-    /// the KCC calls it during a resimulated move step, eliminating the prediction pops
-    /// that occurred in the previous model where FollowerEntity (running in Unity's Update
-    /// loop) moved NPCs outside Fusion's tick loop.
+    /// For the handful of forward-prediction ticks that extend beyond the latest received server
+    /// snapshot, <c>FNonPlayerCharacterData.Velocity</c> (computed server-side each tick and
+    /// replicated) is used to linearly extrapolate each NPC's position.  This keeps the predicted
+    /// player position close to what the server will confirm, minimising corrections at 150 ms ping.
     ///
     /// <b>Physics layer design:</b>
     /// NPC prefabs must be placed on the "NPC" physics layer (layer 6), which is intentionally
@@ -96,6 +94,17 @@ namespace VoidRogues
                         continue;
 
                     Vector3 npcPos  = npc.Position;
+
+                    // On the client during forward-prediction ticks, the snapshot position is
+                    // frozen at the last confirmed server tick.  Extrapolate using the replicated
+                    // per-tick velocity so the predicted NPC position better matches where the
+                    // server will have it, reducing correction pops at high ping.
+                    if (!kcc.Runner.IsServer && kcc.Runner.IsForward)
+                    {
+                        int forwardTicks = (int)kcc.Runner.Tick - (int)kcc.Runner.LatestServerTick;
+                        if (forwardTicks > 0)
+                            npcPos += npc.Velocity * (forwardTicks * kcc.Runner.DeltaTime);
+                    }
 
                     // Closest point on the KCC capsule segment to the NPC centre.
                     Vector3 closest = ClosestPointOnSegment(capsuleBottom, capsuleTop, npcPos);

@@ -12,6 +12,17 @@ namespace VoidRogues.NonPlayerCharacters
         [Tooltip("Enable detailed logging for NPC spawning, loading, and state changes")]
         private bool verboseLogging = false;
 
+        [Header("Player-NPC Separation")]
+        [SerializeField]
+        [Tooltip("NPC collision radius used for server-side player-NPC separation (world units). " +
+                 "Should match the FollowerEntity shape.radius on the NPC prefab.")]
+        private float _npcSeparationRadius = 0.5f;
+
+        [SerializeField]
+        [Tooltip("Player collision radius used for server-side player-NPC separation (world units). " +
+                 "Should match the KCC Radius on the PlayerCharacter prefab.")]
+        private float _playerSeparationRadius = 0.35f;
+
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
 
@@ -23,6 +34,9 @@ namespace VoidRogues.NonPlayerCharacters
         private Dictionary<int, NPCViewEntry> _views = new Dictionary<int, NPCViewEntry>(NonPlayerCharacterConstants.MAX_NPC_REPS);
         private List<int> _finishedViews = new List<int>(NonPlayerCharacterConstants.MAX_NPC_REPS); // For cleanup
         private int _viewCount;
+
+        // Pre-allocated list for player lookups in the separation pass (avoids per-tick allocation).
+        private readonly List<PlayerCharacter> _playerSearchList = new List<PlayerCharacter>(4);
 
         public Action<NonPlayerCharacter> OnCharacterSpawned;
         public Action<NonPlayerCharacter> OnCharacterDespawned;
@@ -193,6 +207,7 @@ namespace VoidRogues.NonPlayerCharacters
 
             bool hasAuthority = HasStateAuthority || Runner.GameMode == GameMode.Single;
             int tick = Runner.Tick;
+            float invDeltaTime = Runner.DeltaTime > 1e-8f ? 1f / Runner.DeltaTime : 0f;
 
             foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
             {
@@ -200,8 +215,29 @@ namespace VoidRogues.NonPlayerCharacters
                 if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
                     continue;
 
-                entry.NPC.OnFixedUpdateNetwork(ref _npcDatas.GetRef(pair.Key), tick, hasAuthority);
+                ref FNonPlayerCharacterData data = ref _npcDatas.GetRef(pair.Key);
+
+                if (hasAuthority)
+                {
+                    // Capture position before the update to compute a per-tick velocity.
+                    // The velocity is replicated so clients can extrapolate NPC positions during
+                    // forward-prediction ticks, reducing player-correction pops.
+                    Vector3 prevPos = data.Position;
+                    entry.NPC.OnFixedUpdateNetwork(ref data, tick, hasAuthority);
+                    data.Velocity = (data.Position - prevPos) * invDeltaTime;
+                }
+                else
+                {
+                    entry.NPC.OnFixedUpdateNetwork(ref data, tick, hasAuthority);
+                }
             }
+
+            // Server-side separation: push NPC positions (and their FollowerEntity transforms) away
+            // from players. This ensures the replicated _npcDatas positions already reflect
+            // player-NPC boundaries, so clients see NPCs spread away from the player in snapshots
+            // and NPCDepenetrationProcessor reads consistent, overlap-free positions.
+            if (hasAuthority)
+                ApplyPlayerNpcSeparation();
         }
 
         // RENDER UPDATE
@@ -315,6 +351,78 @@ namespace VoidRogues.NonPlayerCharacters
                 var npc = entry.NPC;
                 npc.StartRecycle();
                 OnCharacterDespawned?.Invoke(npc);
+            }
+        }
+
+        /// <summary>
+        /// Server-only pass that pushes each active NPC away from every player whose position
+        /// overlaps the combined (NPC + player) separation radius.
+        ///
+        /// Both <c>_npcDatas[i].Position</c> (replicated to clients) and the NPC's actual
+        /// Transform (read by FollowerEntity in the next Unity Update) are updated, so:
+        /// <list type="bullet">
+        ///   <item>Clients receive snapshot positions that already reflect player-NPC separation,
+        ///         making <see cref="NPCDepenetrationProcessor"/> reads consistent across peers.</item>
+        ///   <item>FollowerEntity continues pathfinding from the pushed position, producing a
+        ///         natural "crowd parts around the player" appearance on the host.</item>
+        /// </list>
+        /// </summary>
+        private void ApplyPlayerNpcSeparation()
+        {
+            Runner.GetAllBehaviours(_playerSearchList);
+            if (_playerSearchList.Count == 0)
+                return;
+
+            float combinedRadius = _npcSeparationRadius + _playerSeparationRadius;
+            float combinedRadiusSq = combinedRadius * combinedRadius;
+
+            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            {
+                NPCViewEntry entry = pair.Value;
+                if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
+                    continue;
+
+                ref FNonPlayerCharacterData data = ref _npcDatas.GetRef(pair.Key);
+                if (data.DefinitionID == 0)
+                    continue;
+
+                Vector3 npcPos = data.Position;
+                bool pushed = false;
+
+                for (int p = 0; p < _playerSearchList.Count; p++)
+                {
+                    PlayerCharacter player = _playerSearchList[p];
+                    if (player == null)
+                        continue;
+
+                    Vector3 playerPos = player.transform.position;
+                    float dx = npcPos.x - playerPos.x;
+                    float dz = npcPos.z - playerPos.z;
+                    float distSq = dx * dx + dz * dz;
+
+                    if (distSq >= combinedRadiusSq)
+                        continue;
+
+                    float dist = distSq > 1e-8f ? Mathf.Sqrt(distSq) : 0f;
+                    float overlap = combinedRadius - dist;
+
+                    Vector3 pushDir;
+                    if (dist > 1e-4f)
+                        pushDir = new Vector3(dx / dist, 0f, dz / dist);
+                    else
+                        pushDir = Vector3.right; // degenerate: coincident centres
+
+                    npcPos += pushDir * overlap;
+                    pushed = true;
+                }
+
+                if (pushed)
+                {
+                    data.Position = npcPos;
+                    // Keep FollowerEntity in sync so it continues from the pushed position,
+                    // giving it a chance to route around the player on the next Update frame.
+                    entry.NPC.CachedTransform.position = npcPos;
+                }
             }
         }
 

@@ -63,12 +63,16 @@ namespace VoidRogues.NonPlayerCharacters
                 // Server drives NPC position via FollowerEntity.
                 _follower.updatePosition = _followerUpdatePosition;
                 _follower.updateRotation = _followerUpdateRotation;
+                SetFollowerLocalAvoidance(_followerLocalAvoidance);
             }
             else
             {
                 // Clients: OnRender drives the transform from interpolated snapshot data.
+                // Disable FollowerEntity movement and RVO so the client-side agent does not
+                // diverge from the server-replicated positions.
                 _follower.updatePosition = false;
                 _follower.updateRotation = false;
+                SetFollowerLocalAvoidance(false);
             }
 
             _follower.simulateMovement = _followerCanMove;
@@ -145,6 +149,8 @@ namespace VoidRogues.NonPlayerCharacters
         public void SetFollowerLocalAvoidance(bool newEnabled)
         {
             _followerLocalAvoidance = newEnabled;
+            if (_follower is FollowerEntity fe)
+                fe.enableLocalAvoidance = newEnabled;
         }
 
         public void SetFollowerMaxSpeed(float newSpeed)
@@ -159,6 +165,7 @@ namespace VoidRogues.NonPlayerCharacters
             SetFollowerUpdatePosition(true);
             SetFollowerUpdateRotation(true);
             SetFollowerCanMove(true);
+            SetFollowerLocalAvoidance(hasAuthority);
         }
 
         public void SetRVOSettings(bool locked, float priority = 0.5f)
