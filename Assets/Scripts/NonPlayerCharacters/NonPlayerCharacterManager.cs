@@ -415,6 +415,67 @@ namespace VoidRogues.NonPlayerCharacters
             }
 
             _viewCount = fromDataCount;
+
+            // === 5. Client-side predicted NPC push (latency cover) ===
+            // The server writes authoritative pushed NPC positions into FNonPlayerCharacterData
+            // each tick, but replication latency (~150 ms at 150 ms ping) means clients see
+            // NPCs at their un-pushed snapshot positions for several frames while they walk
+            // through the player. To eliminate that visual pop without waiting for the server
+            // round-trip, apply the same XZ separation logic here using the local player's
+            // current render-time transform position. Only the CachedTransform (visual) is
+            // moved — no networked state is written — so the server correction that arrives
+            // next converges cleanly rather than causing a position hitch.
+            if (!hasAuthority)
+                ApplyClientSidePredictedSeparation();
+        }
+
+        /// <summary>
+        /// Runs on non-authority clients each render frame to visually push NPC transforms
+        /// away from the local observed player, covering replication latency (~150 ms) without
+        /// waiting for the next server snapshot.
+        ///
+        /// <b>No network state is written.</b>  Only <c>NonPlayerCharacter.CachedTransform.position</c>
+        /// is adjusted.  The server independently applies the same separation each tick and
+        /// replicates the corrected positions, so the visual prediction converges smoothly with
+        /// the authoritative data rather than producing a correction pop.
+        /// </summary>
+        private void ApplyClientSidePredictedSeparation()
+        {
+            PlayerCharacter localPlayer = Context?.ObservedPlayerCharacter;
+            if (localPlayer == null)
+                return;
+
+            Vector3 playerPos  = localPlayer.transform.position;
+            float combined     = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
+            float combinedSq   = combined * combined;
+
+            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            {
+                NPCViewEntry entry = pair.Value;
+                if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
+                    continue;
+
+                Transform npcTransform = entry.NPC.CachedTransform;
+                Vector3   npcPos       = npcTransform.position;
+
+                float dx     = npcPos.x - playerPos.x;
+                float dz     = npcPos.z - playerPos.z;
+                float distSq = dx * dx + dz * dz;
+
+                if (distSq >= combinedSq)
+                    continue;
+
+                float dist    = distSq > EPSILON_SQUARED ? Mathf.Sqrt(distSq) : 0f;
+                float overlap = combined - dist;
+
+                Vector3 pushDir;
+                if (dist > DISTANCE_EPSILON)
+                    pushDir = new Vector3(dx / dist, 0f, dz / dist);
+                else
+                    pushDir = Vector3.right;  // Coincident centres — stable fallback.
+
+                npcTransform.position = npcPos + pushDir * overlap;
+            }
         }
 
         private void ReturnView(int index, NPCViewEntry entry)
