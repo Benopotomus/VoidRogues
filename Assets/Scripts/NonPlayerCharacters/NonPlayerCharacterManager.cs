@@ -2,7 +2,6 @@ using Fusion;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using VoidRogues;
 
 namespace VoidRogues.NonPlayerCharacters
 {
@@ -26,6 +25,14 @@ namespace VoidRogues.NonPlayerCharacters
         [SerializeField]
         [Tooltip("Extra gap added on top of the combined radius to prevent tight sliding contact.")]
         private float _separationSkinWidth = 0.02f;
+
+        // Minimum squared magnitude used when checking whether a computed push vector is
+        // effectively zero (avoids normalising near-zero vectors).
+        private const float EPSILON_SQUARED = 1e-8f;
+
+        // Minimum XZ distance at which we consider two centres non-coincident and can
+        // derive a reliable push direction from their delta.
+        private const float DISTANCE_EPSILON = 1e-4f;
 
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
@@ -285,11 +292,11 @@ namespace VoidRogues.NonPlayerCharacters
                     if (distSq >= combinedSq)
                         continue;  // No overlap.
 
-                    float dist    = distSq > 1e-8f ? Mathf.Sqrt(distSq) : 0f;
+                    float dist    = distSq > EPSILON_SQUARED ? Mathf.Sqrt(distSq) : 0f;
                     float overlap = combined - dist;
 
                     Vector3 pushDir;
-                    if (dist > 1e-4f)
+                    if (dist > DISTANCE_EPSILON)
                         pushDir = new Vector3(dx / dist, 0f, dz / dist);
                     else
                         pushDir = Vector3.right;  // Coincident centres — stable fallback.
@@ -297,7 +304,7 @@ namespace VoidRogues.NonPlayerCharacters
                     totalPush += pushDir * overlap;
                 }
 
-                if (totalPush.sqrMagnitude < 1e-8f)
+                if (totalPush.sqrMagnitude < EPSILON_SQUARED)
                     continue;
 
                 Vector3 newPos = npcPos + totalPush;
