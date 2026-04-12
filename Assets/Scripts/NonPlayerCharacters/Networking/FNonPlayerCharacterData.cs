@@ -175,9 +175,7 @@ namespace VoidRogues.NonPlayerCharacters
 
         /// <summary>
         /// True when this NPC is actively moving toward its steering target.
-        /// Set by the server in <c>FixedUpdateNetwork</c> Phase 2 and replicated to all peers.
-        /// Clients read this during Fusion resimulation to decide whether to integrate position.
-        /// Stored in bit 18 of <c>_configuration</c> (first free bit above the 4-bit FormationIndex).
+        /// Stored in bit 18 of <c>_configuration</c>.
         /// </summary>
         public bool IsMoving
         {
