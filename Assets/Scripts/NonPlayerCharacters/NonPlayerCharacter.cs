@@ -99,16 +99,16 @@ namespace VoidRogues.NonPlayerCharacters
 
         }
 
-        // Called from NonPlayerCharacterManager.FixedUpdateNetwork() Phase 2 after the NPC view
-        // has fully spawned.  Position integration has already happened in Phase 1.
-        // This is the correct place for AI decisions and steering direction updates.
-        public void OnFixedUpdateNetwork(ref FNonPlayerCharacterData data, int tick, bool hasAuthority, float deltaTime)
+        // Called from NonPlayerCharacterManager.FixedUpdateNetwork() after the NPC view has fully
+        // spawned.  The server runs brain AI and captures the FollowerEntity-driven transform
+        // position into the networked struct so clients receive authoritative NPC positions.
+        public void OnFixedUpdateNetwork(ref FNonPlayerCharacterData data, int tick, bool hasAuthority)
         {
             if (hasAuthority)
                 _brainComponent.AuthorityUpdate(tick);
 
-            // Update steering direction and isMoving flag (server-only, no-op on clients).
-            _movementComponent.UpdateSteering(ref data, hasAuthority);
+            if (hasAuthority)
+                _movementComponent.OnFixedNetworkUpdate(ref data, tick);
         }
 
         public void StartRecycle()
