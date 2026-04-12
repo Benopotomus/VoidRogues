@@ -31,8 +31,17 @@ namespace VoidRogues.NonPlayerCharacters
         [Range(0f, 1f)]
         [Tooltip("Fraction of the overlap resolved per server tick (0 = no push, 1 = instant full " +
                  "separation). Values below 1 smooth the push over several ticks and reduce the " +
-                 "perceived snap when latency is high.")]
+                 "perceived snap when latency is high.  Server-side only.")]
         private float _pushStrength = 1.0f;
+
+        [Header("Client-Side Predictive Separation")]
+        [SerializeField]
+        [Range(1f, 30f)]
+        [Tooltip("Speed (units/sec) at which the visual separation offset decays back toward the " +
+                 "server-authoritative NPC position once the server has acknowledged the push. " +
+                 "Higher values track the network position more tightly; lower values give a " +
+                 "softer, more gradual blend-out.")]
+        private float _separationDecaySpeed = 10f;
 
         // Minimum squared magnitude used when checking whether a computed push vector is
         // effectively zero (avoids normalising near-zero vectors).
@@ -51,6 +60,12 @@ namespace VoidRogues.NonPlayerCharacters
         private NonPlayerCharacterSpawner _spawner = new NonPlayerCharacterSpawner();
 
         private Dictionary<int, NPCViewEntry> _views = new Dictionary<int, NPCViewEntry>(NonPlayerCharacterConstants.MAX_NPC_REPS);
+
+        // Per-NPC display positions persisted across render frames for smooth client-side
+        // separation.  Only entries for NPCs that are currently being held or decayed are stored;
+        // NPCs in the FREE state (network pos already outside player circle, no offset) have no
+        // entry here.  Cleared when a view is returned so recycled NPC indices start fresh.
+        private readonly Dictionary<int, Vector3> _npcDisplayPositions = new Dictionary<int, Vector3>(32);
         private List<int> _finishedViews = new List<int>(NonPlayerCharacterConstants.MAX_NPC_REPS); // For cleanup
         private int _viewCount;
 
@@ -322,17 +337,39 @@ namespace VoidRogues.NonPlayerCharacters
 
         /// <summary>
         /// Visual-only separation pass run on clients each render frame.
-        /// After the normal snapshot interpolation has placed every NPC at its
-        /// replicated position, this method nudges NPC transforms away from the
-        /// <em>locally-predicted</em> player position so that the push effect is
-        /// visible immediately — before the server-authoritative correction arrives
-        /// (~150 ms later at typical latency).
         ///
-        /// Only the local player's position is used because that is the one position
-        /// the client knows precisely without round-trip delay (the KCC runs
-        /// client-side prediction).  No <see cref="FNonPlayerCharacterData"/> fields
-        /// are mutated; the adjustment is purely cosmetic and will be overwritten by
-        /// the next interpolation step on the following frame.
+        /// <para>
+        /// The previous single-frame approach just pushed NPC transforms away from the
+        /// local player after interpolation, but the push was thrown away at the start of
+        /// the next frame when <c>OnRender</c> reset the position to the new network-
+        /// interpolated value.  When the player is moving forward, the interpolation can
+        /// carry an NPC from <em>in front of</em> the player to <em>behind</em> it in one
+        /// lerp step (because the server pushed relative to an older player position),
+        /// causing a visible flicker/pop.
+        /// </para>
+        ///
+        /// <para>
+        /// This version maintains a persistent display position per NPC and operates as a
+        /// three-state machine:
+        /// </para>
+        /// <list type="bullet">
+        ///   <item><b>FREE</b> – network position is already outside the player circle and
+        ///   there is no outstanding offset.  The NPC transform simply follows the network
+        ///   data; no entry is stored in <see cref="_npcDisplayPositions"/>.</item>
+        ///   <item><b>HELD</b> – network position is inside the player circle (server push
+        ///   hasn't arrived yet).  The display position is clamped to the circle edge in
+        ///   the <em>same direction</em> as the last displayed position, preventing the
+        ///   interpolation from pulling the NPC through the player boundary.</item>
+        ///   <item><b>DECAYING</b> – network position has exited the circle (server has
+        ///   processed the push).  The display position smoothly moves toward the
+        ///   authoritative network position at <see cref="_separationDecaySpeed"/>, but is
+        ///   never allowed to cross back inside the circle while converging.</item>
+        /// </list>
+        ///
+        /// <para>
+        /// No <see cref="FNonPlayerCharacterData"/> fields are mutated; all adjustments are
+        /// purely cosmetic and scoped to the NPC's <c>Transform</c>.
+        /// </para>
         /// </summary>
         private void ApplyPredictiveClientSeparation()
         {
@@ -344,6 +381,7 @@ namespace VoidRogues.NonPlayerCharacters
             float combinedSq = combined * combined;
 
             Vector3 playerPos = localPlayer.transform.position;
+            float   dt        = Time.deltaTime;
 
             foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
             {
@@ -351,23 +389,99 @@ namespace VoidRogues.NonPlayerCharacters
                 if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
                     continue;
 
+                int       key          = pair.Key;
                 Transform npcTransform = entry.NPC.CachedTransform;
-                Vector3   npcPos       = npcTransform.position;
 
-                float dx     = npcPos.x - playerPos.x;
-                float dz     = npcPos.z - playerPos.z;
-                float distSq = dx * dx + dz * dz;
+                // networkPos: where OnRender just placed the NPC via snapshot interpolation.
+                Vector3 networkPos = npcTransform.position;
 
-                if (distSq >= combinedSq)
+                // XZ distance from the local player to the server-replicated NPC position.
+                float ndx           = networkPos.x - playerPos.x;
+                float ndz           = networkPos.z - playerPos.z;
+                float networkDistSq = ndx * ndx + ndz * ndz;
+
+                bool    hasLastDisplay = _npcDisplayPositions.TryGetValue(key, out Vector3 lastDisplayPos);
+                Vector3 displayPos;
+
+                if (networkDistSq < combinedSq)
+                {
+                    // ── HELD ──────────────────────────────────────────────────────────────
+                    // The server data places the NPC inside the player circle; the
+                    // authoritative push hasn't reached us yet.  Pin the display position
+                    // on the circle edge in the direction of the last displayed position so
+                    // the NPC cannot lerp through the player as the interpolation catches up.
+                    Vector3 pushDir;
+
+                    if (hasLastDisplay)
+                    {
+                        float ldx     = lastDisplayPos.x - playerPos.x;
+                        float ldz     = lastDisplayPos.z - playerPos.z;
+                        float ldistSq = ldx * ldx + ldz * ldz;
+
+                        if (ldistSq > EPSILON_SQUARED)
+                            pushDir = new Vector3(ldx, 0f, ldz) * (1f / Mathf.Sqrt(ldistSq));
+                        else
+                            pushDir = networkDistSq > EPSILON_SQUARED
+                                ? new Vector3(ndx, 0f, ndz) * (1f / Mathf.Sqrt(networkDistSq))
+                                : Vector3.right;
+                    }
+                    else
+                    {
+                        // First frame this NPC is overlapping: use the network direction.
+                        pushDir = networkDistSq > EPSILON_SQUARED
+                            ? new Vector3(ndx, 0f, ndz) * (1f / Mathf.Sqrt(networkDistSq))
+                            : Vector3.right;
+                    }
+
+                    displayPos = new Vector3(
+                        playerPos.x + pushDir.x * combined,
+                        networkPos.y,
+                        playerPos.z + pushDir.z * combined);
+                }
+                else if (hasLastDisplay)
+                {
+                    // ── DECAYING ──────────────────────────────────────────────────────────
+                    // The server has pushed the NPC outside the circle.  Move the display
+                    // position back toward the authoritative network position at a fixed
+                    // speed, but clamp it to stay outside the circle the whole way so the
+                    // NPC never visually re-enters the player during convergence.
+                    displayPos = Vector3.MoveTowards(lastDisplayPos, networkPos, _separationDecaySpeed * dt);
+
+                    float ddx         = displayPos.x - playerPos.x;
+                    float ddz         = displayPos.z - playerPos.z;
+                    float displayDistSq = ddx * ddx + ddz * ddz;
+
+                    if (displayDistSq < combinedSq)
+                    {
+                        float   ddist    = displayDistSq > EPSILON_SQUARED ? Mathf.Sqrt(displayDistSq) : 0f;
+                        Vector3 clampDir = ddist > DISTANCE_EPSILON
+                            ? new Vector3(ddx / ddist, 0f, ddz / ddist)
+                            : Vector3.right;
+                        displayPos = new Vector3(
+                            playerPos.x + clampDir.x * combined,
+                            networkPos.y,
+                            playerPos.z + clampDir.z * combined);
+                    }
+
+                    // Once we've converged with the network position, exit tracking so
+                    // future frames skip the dictionary lookup entirely for this NPC.
+                    if ((displayPos - networkPos).sqrMagnitude < 1e-4f)
+                    {
+                        _npcDisplayPositions.Remove(key);
+                        npcTransform.position = networkPos;
+                        continue;
+                    }
+                }
+                else
+                {
+                    // ── FREE ──────────────────────────────────────────────────────────────
+                    // Network position is already outside the circle with no outstanding
+                    // offset.  Nothing to do; OnRender has already placed the NPC correctly.
                     continue;
+                }
 
-                float   dist    = distSq > EPSILON_SQUARED ? Mathf.Sqrt(distSq) : 0f;
-                float   overlap = combined - dist;
-                Vector3 pushDir = dist > DISTANCE_EPSILON
-                    ? new Vector3(dx / dist, 0f, dz / dist)
-                    : Vector3.right;
-
-                npcTransform.position = npcPos + pushDir * (overlap * _pushStrength);
+                _npcDisplayPositions[key] = displayPos;
+                npcTransform.position     = displayPos;
             }
         }
 
@@ -484,6 +598,8 @@ namespace VoidRogues.NonPlayerCharacters
 
         private void ReturnView(int index, NPCViewEntry entry)
         {
+            _npcDisplayPositions.Remove(index);
+
             if (entry.NPC != null)
             {
                 var npc = entry.NPC;
