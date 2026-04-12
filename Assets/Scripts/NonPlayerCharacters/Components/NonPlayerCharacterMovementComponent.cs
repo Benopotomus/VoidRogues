@@ -65,6 +65,7 @@ namespace VoidRogues.NonPlayerCharacters
                 // Server drives NPC position via FollowerEntity.
                 _follower.updatePosition = _followerUpdatePosition;
                 _follower.updateRotation = _followerUpdateRotation;
+                _follower.simulateMovement = _followerCanMove;
                 SetFollowerLocalAvoidance(_followerLocalAvoidance);
             }
             else
@@ -74,10 +75,10 @@ namespace VoidRogues.NonPlayerCharacters
                 // diverge from the server-replicated positions.
                 _follower.updatePosition = false;
                 _follower.updateRotation = false;
+                _follower.simulateMovement = false;
                 SetFollowerLocalAvoidance(false);
             }
 
-            _follower.simulateMovement = _followerCanMove;
             _follower.maxSpeed = _followerMaxSpeed;
             _follower.Teleport(data.Position, clearPath: true);
         }
