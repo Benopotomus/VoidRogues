@@ -5,11 +5,11 @@ namespace VoidRogues
     using VoidRogues.NonPlayerCharacters;
 
     /// <summary>
-    /// KCC processor that applies analytic capsule-vs-sphere depenetration against every
+    /// KCC processor that applies analytic horizontal depenetration against every
     /// active NPC by reading positions directly from the server-authoritative
     /// <see cref="NonPlayerCharacterManager"/> networked struct array.
     ///
-    /// <b>Why this is now fully deterministic</b><br/>
+    /// <b>Why this is fully deterministic</b><br/>
     /// NPC positions in <c>FNonPlayerCharacterData.Position</c> are written exclusively
     /// inside <c>NonPlayerCharacterManager.FixedUpdateNetwork</c> (Phase 1), which runs
     /// on every peer during Fusion's tick loop — including resimulated ticks on clients.
@@ -22,6 +22,11 @@ namespace VoidRogues
     /// that occurred in the previous model where FollowerEntity (running in Unity's Update
     /// loop) moved NPCs outside Fusion's tick loop.
     ///
+    /// <b>XZ-only distance</b><br/>
+    /// This is a top-down game where all characters share the same ground plane (Y ≈ 0).
+    /// Separation is computed purely in the horizontal (XZ) plane so that the KCC capsule's
+    /// vertical extent does not inflate the measured distance and cause missed collisions.
+    ///
     /// <b>Physics layer design:</b>
     /// NPC prefabs must be placed on the "NPC" physics layer (layer 6), which is intentionally
     /// excluded from the KCC's <c>CollisionLayerMask</c> (layer 0 / Default only).
@@ -29,7 +34,7 @@ namespace VoidRogues
     /// is the <em>sole</em> player-NPC separation mechanism on both server and client.
     ///
     /// Add as a prefab processor in the KCC component's Processors list on the PlayerCharacter prefab.
-    /// The manager reference is resolved lazily on first use.
+    /// The manager reference is resolved lazily and retried every tick until found.
     /// </summary>
     public class NPCDepenetrationProcessor : KCCProcessor, IAfterMoveStep
     {
@@ -55,7 +60,20 @@ namespace VoidRogues
         private int _maxIterations = 3;
 
         private NonPlayerCharacterManager _npcManager;
-        private bool _managerSearched;
+
+        // NetworkBehaviour INTERFACE
+
+        public override void Spawned()
+        {
+            base.Spawned();
+            _npcManager = null;
+        }
+
+        public override void Despawned(NetworkRunner runner, bool hasState)
+        {
+            base.Despawned(runner, hasState);
+            _npcManager = null;
+        }
 
         // IAfterMoveStep INTERFACE
 
@@ -63,28 +81,18 @@ namespace VoidRogues
         {
             if (_npcManager == null)
             {
-                if (_managerSearched)
-                    return;
-
-                _managerSearched = true;
                 _npcManager = Object.FindFirstObjectByType<NonPlayerCharacterManager>();
                 if (_npcManager == null)
                     return;
             }
 
-            float kccRadius  = kcc.Settings.Radius;
-            float kccHeight  = kcc.Settings.Height;
-            float combined   = kccRadius + _npcRadius + _skinWidth;
+            float combined   = kcc.Settings.Radius + _npcRadius + _skinWidth;
             float combinedSq = combined * combined;
 
             // Iterative solver so clustered NPCs all resolve cleanly.
             for (int iter = 0; iter < _maxIterations; iter++)
             {
                 bool anyPenetration = false;
-
-                // Recalculate capsule endpoints at the start of each outer pass.
-                Vector3 capsuleBottom = data.TargetPosition + new Vector3(0f, kccRadius, 0f);
-                Vector3 capsuleTop    = data.TargetPosition + new Vector3(0f, kccHeight - kccRadius, 0f);
 
                 // Iterate every slot in the fixed-size NPC array.
                 // Slots with DefinitionID == 0 are free/recycled and are skipped cheaply.
@@ -95,14 +103,13 @@ namespace VoidRogues
                     if (npc.DefinitionID == 0)
                         continue;
 
-                    Vector3 npcPos  = npc.Position;
+                    Vector3 npcPos = npc.Position;
 
-                    // Closest point on the KCC capsule segment to the NPC centre.
-                    Vector3 closest = ClosestPointOnSegment(capsuleBottom, capsuleTop, npcPos);
-
-                    // Direction from NPC centre toward the closest point on the KCC capsule.
-                    Vector3 delta  = closest - npcPos;
-                    float   distSq = delta.sqrMagnitude;
+                    // Use XZ-only distance so the KCC capsule's vertical extent does not
+                    // inflate the measured separation and cause missed depenetrations.
+                    float dx     = data.TargetPosition.x - npcPos.x;
+                    float dz     = data.TargetPosition.z - npcPos.z;
+                    float distSq = dx * dx + dz * dz;
 
                     if (distSq >= combinedSq)
                         continue;   // No overlap.
@@ -113,54 +120,24 @@ namespace VoidRogues
                     Vector3 pushDir;
                     if (dist > 1e-4f)
                     {
-                        pushDir = new Vector3(delta.x / dist, 0f, delta.z / dist);
+                        pushDir = new Vector3(dx / dist, 0f, dz / dist);
                     }
                     else
                     {
-                        // Degenerate: player and NPC centres are coincident.
+                        // Degenerate: player and NPC centres are coincident on XZ.
                         // Use a stable arbitrary horizontal direction as a fallback.
                         pushDir = Vector3.right;
-                    }
-
-                    float pushMagSq = pushDir.sqrMagnitude;
-                    if (pushMagSq < 1e-8f)
-                    {
-                        // Directly above or below — no horizontal component, pick world X.
-                        pushDir = Vector3.right;
-                    }
-                    else
-                    {
-                        pushDir /= Mathf.Sqrt(pushMagSq);
                     }
 
                     float overlap = combined - dist;
                     data.TargetPosition += pushDir * overlap;
 
                     anyPenetration = true;
-
-                    // Update endpoints immediately so later NPCs in this same pass
-                    // see the corrected player position.
-                    capsuleBottom = data.TargetPosition + new Vector3(0f, kccRadius, 0f);
-                    capsuleTop    = data.TargetPosition + new Vector3(0f, kccHeight - kccRadius, 0f);
                 }
 
                 if (!anyPenetration)
                     break;
             }
-        }
-
-        // PRIVATE METHODS
-
-        /// <summary>Returns the point on segment AB that is closest to point P.</summary>
-        private static Vector3 ClosestPointOnSegment(Vector3 a, Vector3 b, Vector3 p)
-        {
-            Vector3 ab      = b - a;
-            float   abSqMag = ab.sqrMagnitude;
-            if (abSqMag < 1e-8f)
-                return a;
-
-            float t = Vector3.Dot(p - a, ab) / abSqMag;
-            return a + Mathf.Clamp01(t) * ab;
         }
     }
 }
