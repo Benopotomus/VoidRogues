@@ -81,8 +81,7 @@ namespace VoidRogues.NonPlayerCharacters
             NullTarget.HasTarget = false;
         }
 
-        public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState, bool hasAuthority)
-        {
+        public void OnSpawned(ref FNonPlayerCharacterData data, bool hasAuthority)        {
             _isInActivationRange = false;
             _isInFaceTargetRange = false;
             AttackTarget.HasTarget = false;

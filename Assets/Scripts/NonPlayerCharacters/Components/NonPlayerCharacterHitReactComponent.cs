@@ -29,6 +29,7 @@ namespace VoidRogues.NonPlayerCharacters
         // TODO: Port VisualEffectSpawner from LichLord
         // private VisualEffectSpawner _visualSpawner = new VisualEffectSpawner();
 
+        /*
         public void UpdateHitReactState(NonPlayerCharacterRuntimeState runtimeState, int tick)
         {
             if (tick > _hitReactEndTick)
@@ -54,6 +55,7 @@ namespace VoidRogues.NonPlayerCharacters
                 _currentAdditiveReactIndex = hitReactIndex;
             }
         }
+        */
 
         public void StartHitReact(ENPCState state, int animIndex, int tick)
         {

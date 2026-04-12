@@ -166,7 +166,7 @@ namespace VoidRogues
 
         public override void Spawned()
         {
-            Runner.SetIsSimulated(Object, true);
+            //Runner.SetIsSimulated(Object, true);
         }
 
         public override void FixedUpdateNetwork()

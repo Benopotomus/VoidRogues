@@ -52,9 +52,10 @@ namespace VoidRogues.NonPlayerCharacters
         }
 
         public bool ExecuteManeuver(NonPlayerCharacter npc,
-            NonPlayerCharacterRuntimeState runtimeState,
+            ref FNonPlayerCharacterData data,
             int tick)
         {
+            /*
             var oldState = runtimeState.GetState();
 
             if (oldState != ENPCState.Idle)
@@ -82,6 +83,7 @@ namespace VoidRogues.NonPlayerCharacters
             CooldownExpirationTick = ActivationTick + Definition.CooldownTicks;
             ActivationExpirationTick = ActivationTick + Definition.StateTicks;
 
+            */
             return true;
         }
 

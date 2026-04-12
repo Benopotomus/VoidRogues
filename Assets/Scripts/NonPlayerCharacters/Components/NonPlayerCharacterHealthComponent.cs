@@ -18,23 +18,16 @@ namespace VoidRogues.NonPlayerCharacters
 
         public Action<int, int, int> OnHealthChanged;
 
-        public void OnSpawned(NonPlayerCharacterRuntimeState state)
+        public void OnSpawned(ref FNonPlayerCharacterData data)
         {
-            _currentHealth = state.GetHealth();
-            _maxHealth = state.GetMaxHealth();
+            //_currentHealth = data.GetHealth();
+           // _maxHealth = data.GetMaxHealth();
         }
 
-        public void OnRender(NonPlayerCharacterRuntimeState state, int tick)
+        public void OnRender(ref FNonPlayerCharacterData toData, ref FNonPlayerCharacterData fromData,
+            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick)
         {
-            var oldHealth = _currentHealth;
-            var newHealth = state.GetHealth();
 
-            if (newHealth == _currentHealth)
-                return;
-
-            _currentHealth = newHealth;
-
-            OnHealthChanged?.Invoke(oldHealth, _currentHealth, _maxHealth);
         }
     }
 }

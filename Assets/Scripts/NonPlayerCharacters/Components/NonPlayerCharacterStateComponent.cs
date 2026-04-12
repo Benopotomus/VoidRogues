@@ -16,10 +16,10 @@ namespace VoidRogues.NonPlayerCharacters
         int _deathTicks = 64;
         int _deathEndTick;
 
-        public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState, bool hasAuthority, int tick)
+        public void OnSpawned(ref FNonPlayerCharacterData data)
         {
             _npc = GetComponent<NonPlayerCharacter>();
-            UpdateState(runtimeState, hasAuthority, tick, true);
+            //UpdateState(runtimeState, hasAuthority, tick, true);
         }
 
         public void StartRecycle()
@@ -27,6 +27,7 @@ namespace VoidRogues.NonPlayerCharacters
             _currentState = ENPCState.Inactive;
         }
 
+        /*
         // Called from Render() on all peers – handles visual reactions to state changes (colliders, animation triggers, follower flags).
         public void UpdateState(NonPlayerCharacterRuntimeState runtimeState, bool hasAuthority, int tick, bool forceUpdate = false)
         {
@@ -35,7 +36,7 @@ namespace VoidRogues.NonPlayerCharacters
 
         // Called from NonPlayerCharacter.OnFixedUpdateAuthority() on the authority/server only.
         // Advances state-machine transitions that write back to networked data (e.g. Dead timer → Inactive).
-        public void FixedUpdateAuthorityState(NonPlayerCharacterRuntimeState runtimeState, int tick)
+        public void OnFixedUpdateNetwork(NonPlayerCharacterRuntimeState runtimeState, int tick)
         {
             UpdateCurrentState(runtimeState, tick);
         }
@@ -148,6 +149,8 @@ namespace VoidRogues.NonPlayerCharacters
             _currentState = newState;
         }
 
+                
+
         private void UpdateCurrentState(NonPlayerCharacterRuntimeState runtimeState, int tick)
         {
             switch (runtimeState.GetState())
@@ -166,5 +169,7 @@ namespace VoidRogues.NonPlayerCharacters
                     break;
             }
         }
+
+        */
     }
 }

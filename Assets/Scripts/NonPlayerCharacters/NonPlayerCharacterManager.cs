@@ -12,26 +12,24 @@ namespace VoidRogues.NonPlayerCharacters
         [Tooltip("Enable detailed logging for NPC spawning, loading, and state changes")]
         private bool verboseLogging = false;
 
-        private class NPCViewEntry
-        {
-            public NonPlayerCharacter NPC;
-            public ELoadState LoadState;
-        }
-
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
+
+        [Networked]
+        protected int _dataCount { get; set; }
 
         private NonPlayerCharacterSpawner _spawner = new NonPlayerCharacterSpawner();
 
         private Dictionary<int, NPCViewEntry> _views = new Dictionary<int, NPCViewEntry>(NonPlayerCharacterConstants.MAX_NPC_REPS);
+        private List<int> _finishedViews = new List<int>(NonPlayerCharacterConstants.MAX_NPC_REPS); // For cleanup
+        private int _viewCount;
 
         public Action<NonPlayerCharacter> OnCharacterSpawned;
         public Action<NonPlayerCharacter> OnCharacterDespawned;
 
-        private NonPlayerCharacterRuntimeState[] _localRuntimeStates =
-            new NonPlayerCharacterRuntimeState[NonPlayerCharacterConstants.MAX_NPC_REPS];
 
         private ArrayReader<FNonPlayerCharacterData> _dataBufferReader;
+        protected PropertyReader<int> _dataCountReader;
 
         public override void Spawned()
         {
@@ -40,15 +38,10 @@ namespace VoidRogues.NonPlayerCharacters
             if (verboseLogging)
                 Debug.Log($"[NPC Manager] Spawned on {(Runner.IsServer ? "Server" : "Client")} | Mode: {Runner.GameMode}");
 
-            _spawner.OnSpawned += OnNonPlayerCharacterSpawned;
+            _spawner.OnPrefabSpawned += OnNPC_Loaded;
 
             _dataBufferReader = GetArrayReader<FNonPlayerCharacterData>(nameof(_npcDatas));
-
-            for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
-            {
-                _localRuntimeStates[i] = new NonPlayerCharacterRuntimeState(this, i);
-                _localRuntimeStates[i].CopyData(ref _npcDatas.GetRef(i));
-            }
+            _dataCountReader = GetPropertyReader<int>(nameof(_dataCount));
 
             if (verboseLogging)
                 Debug.Log($"[NPC Manager] Initialized {NonPlayerCharacterConstants.MAX_NPC_REPS} NPC slots");
@@ -99,7 +92,7 @@ namespace VoidRogues.NonPlayerCharacters
                 Debug.Log($"[NPC Manager] Spawning NPC at index {freeIndex} | Position: {data.Position}");
 
             _npcDatas.Set(freeIndex, data);
-            _localRuntimeStates[freeIndex].CopyData(ref data);
+            _dataCount++;
 
             return freeIndex;
         }
@@ -150,13 +143,13 @@ namespace VoidRogues.NonPlayerCharacters
             SpawnNPC(ref data);
         }
 
-        private void OnNonPlayerCharacterSpawned(FNonPlayerCharacterSpawnParams spawnParams, NonPlayerCharacter character)
+        private void OnNPC_Loaded(FNonPlayerCharacterData data, int index, NonPlayerCharacter character)
         {
             if (verboseLogging)
-                Debug.Log($"[NPC Manager] NPC GameObject Spawned! Index: {spawnParams.Index} | Position: {spawnParams.Position}");
+                Debug.Log($"[NPC Manager] NPC GameObject Spawned! Index: {index} | Position: {data.Position}");
 
             // If the view entry was removed before the async load completed, discard the instantiated object.
-            if (!_views.TryGetValue(spawnParams.Index, out var entry))
+            if (!_views.TryGetValue(index, out var entry))
             {
                 character.StartRecycle();
                 return;
@@ -165,46 +158,9 @@ namespace VoidRogues.NonPlayerCharacters
             entry.NPC = character;
             entry.LoadState = ELoadState.Loaded;
 
-            _localRuntimeStates[spawnParams.Index].SetPosition(spawnParams.Position);
-
             bool hasAuthority = Runner.IsServer || Runner.GameMode == GameMode.Single;
             int tick = Runner.Tick;
-
-            character.OnSpawned(_localRuntimeStates[spawnParams.Index], this, hasAuthority, tick);
-
-            OnCharacterSpawned?.Invoke(character);
-        }
-
-        // FixedUpdateNetwork – runs on all peers.
-        // Drives NPC simulation logic for every loaded NPC slot.
-        // Gated on the NPC view (GameObject) being fully spawned before any logic executes.
-        public override void FixedUpdateNetwork()
-        {
-            if (!Runner.IsForward || !Runner.IsFirstTick)
-                return;
-
-            if (!Context.IsGameplayActive())
-                return;
-
-            int tick = Runner.Tick;
-
-            for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
-            {
-                UpdateNPCData(i, ref _npcDatas.GetRef(i), tick);
-            }
-        }
-
-        private void UpdateNPCData(int index, ref FNonPlayerCharacterData data, int tick)
-        {
-            // Skip inactive slots.
-            if (_localRuntimeStates[index].GetStateFromData(ref data) == ENPCState.Inactive)
-                return;
-
-            // Gate: NPC view must be fully spawned before any logic runs.
-            if (!_views.TryGetValue(index, out var entry) || entry.LoadState != ELoadState.Loaded)
-                return;
-
-            entry.NPC.OnFixedUpdateNetwork(ref data, tick);
+            character.OnSpawned(ref data, this, hasAuthority, tick); 
         }
 
         public ref FNonPlayerCharacterData GetNpcData(int index)
@@ -219,87 +175,138 @@ namespace VoidRogues.NonPlayerCharacters
             return null;
         }
 
-        public bool IsViewLoaded(int index)
-        {
-            return _views.TryGetValue(index, out var entry) && entry.LoadState == ELoadState.Loaded;
-        }
-
-        public NonPlayerCharacterRuntimeState GetNpcRuntimeState(int index)
-        {
-            if (index >= _localRuntimeStates.Length)
-                return null;
-            return _localRuntimeStates[index];
-        }
-
         public int GetFreeIndex()
         {
             for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
             {
-                if (_localRuntimeStates[i].GetStateFromData(ref _npcDatas.GetRef(i)) == ENPCState.Inactive)
+                if (_npcDatas.GetRef(i).DefinitionID == 0)
                     return i;
             }
             return -1;
         }
 
-        public void ReplicateRuntimeState(NonPlayerCharacterRuntimeState runtimeState)
-        {
-            if (verboseLogging)
-                Debug.Log($"[NPC Manager] Replicating runtime state for NPC index {runtimeState.Index}");
 
-            _npcDatas.Set(runtimeState.Index, runtimeState.Data);
+        // FIXED UPDATE NETWORK
+        public override void FixedUpdateNetwork()
+        {
+            Debug.Log("Fised Update Network");
+
+            if (!Context.IsGameplayActive())
+                return;
+
+            int tick = Runner.Tick;
+
+            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            {
+                if (pair.Value.LoadState != ELoadState.Loaded)
+                    continue;
+
+                pair.Value.NPC.OnFixedUpdateNetwork(ref _npcDatas.GetRef(pair.Key), tick);
+            }
         }
 
+        // RENDER UPDATE
+        // RENDER - Cleaned up to match ProjectilePool style
         public override void Render()
         {
             base.Render();
             if (!Context.IsGameplayActive())
                 return;
 
-            float renderTime = HasStateAuthority ? Runner.LocalRenderTime : Runner.RemoteRenderTime;
+            bool hasAuthority = HasStateAuthority;
+            float renderTime = hasAuthority ? Runner.LocalRenderTime : Runner.RemoteRenderTime;
             float localDeltaTime = Time.deltaTime;
             float networkDeltaTime = Runner.DeltaTime;
             int tick = Runner.Tick;
 
-            if (!TryGetSnapshotsBuffers(out var fromBuffer, out var toBuffer, out float alpha))
+            if (TryGetSnapshotsBuffers(out var fromNetworkBuffer, out var toNetworkBuffer, out float bufferAlpha) == false)
                 return;
 
-            NetworkArrayReadOnly<FNonPlayerCharacterData> fromDataBuffer = _dataBufferReader.Read(fromBuffer);
-            NetworkArrayReadOnly<FNonPlayerCharacterData> toDataBuffer = _dataBufferReader.Read(toBuffer);
+            NetworkArrayReadOnly<FNonPlayerCharacterData> fromDataBuffer = _dataBufferReader.Read(fromNetworkBuffer);
+            NetworkArrayReadOnly<FNonPlayerCharacterData> toDataBuffer = _dataBufferReader.Read(toNetworkBuffer);
+            int fromDataCount = _dataCountReader.Read(fromNetworkBuffer);
+            int toDataCount = _dataCountReader.Read(toNetworkBuffer);
 
-            for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
+            // === 1. Remove mispredicted / extra views ===
+            for (int i = fromDataCount; i < _viewCount; i++)
             {
-                var fromData = fromDataBuffer[i];
-                var toData = toDataBuffer[i];
-                bool shouldBeActive = _localRuntimeStates[i].GetStateFromData(ref fromData) != ENPCState.Inactive;
-
-                bool hasView = _views.TryGetValue(i, out var entry);
-
-                if (shouldBeActive && !hasView)
+                if (_views.TryGetValue(i, out var viewEntry))
                 {
-                    // Slot became active – request a view (async asset bundle load).
                     if (verboseLogging)
-                        Debug.Log($"[NPC Manager] Requesting spawn for NPC slot {i}");
+                        Debug.Log($"[NPC Manager] Removing mispredicted view at index {i}");
 
-                    _views.Add(i, new NPCViewEntry { LoadState = ELoadState.Loading });
-                    _spawner.SpawnNPC(ref fromData, i);
-                }
-                else if (shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
-                {
-                    // View exists and is ready – tick the visual with interpolated snapshot data.
-                    entry.NPC.OnRender(ref toData, ref fromData, alpha, renderTime, networkDeltaTime, localDeltaTime, tick);
-                }
-                else if (!shouldBeActive && hasView && entry.LoadState == ELoadState.Loaded)
-                {
-                    // Slot became inactive – return the view.
-                    if (verboseLogging)
-                        Debug.Log($"[NPC Manager] Despawning NPC at index {i}");
-
-                    ReturnView(i, entry);
+                    ReturnView(i, viewEntry);
                     _views.Remove(i);
                 }
-                // shouldBeActive && hasView && LoadState == Loading → still loading, nothing to do this frame.
-                // !shouldBeActive && !hasView → already clean.
             }
+
+            // === 2. Spawn missing views ===
+            for (int i = _viewCount; i < fromDataCount; i++)
+            {
+                int bufferIndex = i % NonPlayerCharacterConstants.MAX_NPC_REPS;
+                var data = fromDataBuffer[bufferIndex];
+
+                if (_views.ContainsKey(i))
+                    continue;
+
+                if (verboseLogging)
+                    Debug.Log($"[NPC Manager] Requesting spawn for NPC view index {i}");
+                
+                var newEntry = new NPCViewEntry { LoadState = ELoadState.Loading };
+                _views.Add(i, newEntry);
+
+                _spawner.SpawnNPC(ref data, i);   // Note: passing global view index i
+            }
+
+            // === 3. Update all current views ===
+            _finishedViews.Clear();
+
+            int bufferLength = NonPlayerCharacterConstants.MAX_NPC_REPS;
+            int minDataKey = fromDataCount - bufferLength;   // similar logic to projectiles
+
+            foreach (var pair in _views)
+            {
+                var entry = pair.Value;
+                int key = pair.Key;
+
+                if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
+                    continue;
+
+                if (key >= minDataKey)
+                {
+                    int bufferIndex = key % bufferLength;
+                    var toData = toDataBuffer[bufferIndex];
+                    var fromData = fromDataBuffer[bufferIndex];
+
+                    entry.NPC.OnRender(ref toData, ref fromData, bufferAlpha, renderTime, networkDeltaTime, localDeltaTime, tick, hasAuthority);
+                    entry.LastData = toData;
+                }
+                else
+                {
+                    // Data fell out of ring buffer → use last known data
+                    entry.NPC.OnRender(ref entry.LastData, ref entry.LastData, 0f, renderTime, networkDeltaTime, localDeltaTime, tick, hasAuthority);
+                }
+
+                if(entry.LoadState != ELoadState.Loaded)
+                    _finishedViews.Add(key);
+                
+            }
+
+            // === 4. Cleanup finished views ===
+            for (int i = 0; i < _finishedViews.Count; i++)
+            {
+                int key = _finishedViews[i];
+                if (_views.TryGetValue(key, out var entry))
+                {
+                    if (verboseLogging)
+                        Debug.Log($"[NPC Manager] Despawning finished NPC at index {key}");
+
+                    ReturnView(key, entry);
+                    _views.Remove(key);
+                }
+            }
+
+            _viewCount = fromDataCount;
         }
 
         private void ReturnView(int index, NPCViewEntry entry)
@@ -310,6 +317,13 @@ namespace VoidRogues.NonPlayerCharacters
                 npc.StartRecycle();
                 OnCharacterDespawned?.Invoke(npc);
             }
+        }
+
+        private class NPCViewEntry
+        {
+            public NonPlayerCharacter NPC;
+            public ELoadState LoadState;
+            public FNonPlayerCharacterData LastData;   // Used when data rolls out of the ring buffer
         }
     }
 }

@@ -6,8 +6,11 @@ namespace VoidRogues.NonPlayerCharacters
     [System.Serializable]
     public class NonPlayerCharacterLoader
     {
-        private FNonPlayerCharacterSpawnParams _spawnParams;
-        public FNonPlayerCharacterSpawnParams SpawnParams => _spawnParams;
+        private FNonPlayerCharacterData _data;
+        public FNonPlayerCharacterData Data => _data;
+
+        private int _index;
+        public int Index => _index;
 
         private AssetBundleLoader _loader;
         public AssetBundleLoader Loader
@@ -25,10 +28,12 @@ namespace VoidRogues.NonPlayerCharacters
         public System.Action<NonPlayerCharacterLoader> OnLoadComplete;
 
         public NonPlayerCharacterLoader() { }
-        public NonPlayerCharacterLoader(FNonPlayerCharacterSpawnParams spawnParams,
+        public NonPlayerCharacterLoader( FNonPlayerCharacterData data, 
+            int index,
             AssetBundleLoader iLoader)
         {
-            _spawnParams.Copy(spawnParams);
+            _data.Copy(data);
+            _index = index;
             Loader = iLoader;
         }
 

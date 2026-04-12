@@ -7,9 +7,6 @@ namespace VoidRogues.NonPlayerCharacters
 
     public class NonPlayerCharacter : DWDObjectPoolObject //, IHitTarget, IHitInstigator, IChunkTrackable
     {
-        private NonPlayerCharacterRuntimeState _runtimeState;
-        public NonPlayerCharacterRuntimeState RuntimeState => _runtimeState;
-
         protected NonPlayerCharacterManager _manager;
         public NonPlayerCharacterManager Manager => _manager;
 
@@ -79,44 +76,36 @@ namespace VoidRogues.NonPlayerCharacters
 
 
 
-        public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState, NonPlayerCharacterManager manager, bool hasAuthority, int tick)
+        public void OnSpawned(ref FNonPlayerCharacterData data, NonPlayerCharacterManager manager, bool hasAuthority, int tick)
         {
-            _runtimeState = runtimeState;
+            Debug.Log("Spawned");
             _context = manager.Context;
             _manager = manager;
-            _healthComponent.OnSpawned(runtimeState);
-            _movementComponent.OnSpawned(runtimeState, hasAuthority);
-            _brainComponent.OnSpawned(runtimeState, hasAuthority);
-            _lifetimeComponent.OnSpawned(runtimeState, tick);
-            _spawningComponent.OnSpawned(runtimeState);
-            _stateComponent.OnSpawned(runtimeState, hasAuthority, tick);
-            _animationController.OnSpawned(runtimeState);
-
-           _index = runtimeState.Index;
+            _healthComponent.OnSpawned(ref data);
+            _movementComponent.OnSpawned(ref data, hasAuthority);
+            _brainComponent.OnSpawned(ref  data, hasAuthority);
+            _spawningComponent.OnSpawned(ref data);
         }
 
         // Called from NonPlayerCharacterManager.Render() on all peers.
         // Reads interpolated snapshot data – no authority writes happen here.
         public void OnRender(ref FNonPlayerCharacterData toData, ref FNonPlayerCharacterData fromData,
-            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick)
+            float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick, bool hasAuthority)
         {
-            _runtimeState.CopyData(ref toData);
 
-            _healthComponent.OnRender(_runtimeState, tick);
-            _stateComponent.UpdateState(_runtimeState, false, tick);
-            _movementComponent.RemoteUpdate(_runtimeState, localDeltaTime, tick);
-            _lifetimeComponent.UpdateLifetime(_runtimeState, false, tick);
+            _movementComponent.OnRender(ref toData, ref fromData, alpha, renderTime, networkDeltaTime, localDeltaTime, tick, hasAuthority); 
             _animationController.SyncTransformToEntity();
             _animationController.UpdateAnimationEvents();
-            _hitReactComponent.UpdateAdditiveHitReactState(_runtimeState, tick);
+
         }
 
         // Called from NonPlayerCharacterManager.FixedUpdateNetwork() after the NPC view has fully spawned.
         // This is the correct place for all data-writing AI and state-machine logic.
         public void OnFixedUpdateNetwork(ref FNonPlayerCharacterData data, int tick)
         {
+
             _brainComponent.AuthorityUpdate(tick);
-            _stateComponent.FixedUpdateAuthorityState(_runtimeState, tick);
+            _movementComponent.OnFixedNetworkUpdate(ref data, tick);
         }
 
         public void StartRecycle()

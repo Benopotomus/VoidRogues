@@ -1,12 +1,12 @@
 using Pathfinding;
+using TMPro;
 using UnityEngine;
 
 namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterMovementComponent : MonoBehaviour
     {
-        [SerializeField] private NonPlayerCharacter _npc;
-        public NonPlayerCharacter NPC => _npc;
+        private NonPlayerCharacter _npc;
 
         private IAstarAI _follower;
         public IAstarAI AIFollower => _follower;
@@ -34,9 +34,11 @@ namespace VoidRogues.NonPlayerCharacters
 
         private float _teleportDistanceSquared = 36;
 
-        public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState, bool hasAuthority)
+        public void OnSpawned(ref FNonPlayerCharacterData data, bool hasAuthority)
         {
-            _lastPosition = runtimeState.GetPosition();
+            _npc = GetComponent<NonPlayerCharacter>();
+
+            _lastPosition = data.Position;
             _cachedTransform = transform;
             _follower = GetComponent<IAstarAI>();
             if (_follower == null)
@@ -58,62 +60,51 @@ namespace VoidRogues.NonPlayerCharacters
             _follower.updateRotation = _followerUpdateRotation;
             _follower.simulateMovement = _followerCanMove;
             _follower.maxSpeed = _followerMaxSpeed;
-            _follower.Teleport(runtimeState.GetPosition(), clearPath: true);
+            _follower.Teleport(data.Position, clearPath: true);
         }
 
-        public void AuthorityUpdate(NonPlayerCharacterRuntimeState runtimeState, float renderDeltaTime, int tick)
+        public void OnFixedNetworkUpdate(ref FNonPlayerCharacterData data, int tick)
         {
-            UpdateVelocity(renderDeltaTime);
+            //UpdateVelocity(renderDeltaTime);
             UpdateYawVelocity();
-            _npc.AnimationController.UpdateAnimatonForMovement(runtimeState, _localVelocity, _yawVelocity, renderDeltaTime);
+            //_npc.AnimationController.UpdateAnimatonForMovement(runtimeState, _localVelocity, _yawVelocity, renderDeltaTime);
             // TODO: Port TryWriteTransformData from LichLord
+            data.Position = _npc.CachedTransform.position;
         }
 
-        public void RemoteUpdate(NonPlayerCharacterRuntimeState runtimeState, float renderDeltaTime, int tick)
-        {
-            if (runtimeState.GetState() == ENPCState.Dead || runtimeState.GetState() == ENPCState.Inactive)
-                return;
+        public void OnRender(ref FNonPlayerCharacterData toData, ref FNonPlayerCharacterData fromData,
+                   float alpha, float renderTime, float networkDeltaTime, float localDeltaTime, int tick, bool hasAuthority)
+        { 
+            if(hasAuthority)
+                return; 
 
-            Vector3 statePosition = runtimeState.GetPosition();
+            Vector3 fromPosition = fromData.Position;
+            Vector3 toPosition = toData.Position;
 
-            if ((statePosition - NPC.CachedTransform.position).sqrMagnitude > _teleportDistanceSquared)
+            if ((fromPosition - toPosition).sqrMagnitude > _teleportDistanceSquared)
             {
-                NPC.CachedTransform.position = statePosition;
+                _npc.CachedTransform.position = toPosition;
             }
             else
             {
-                Vector3 currentPos = NPC.CachedTransform.position;
-                Vector3 targetPos = statePosition;
-
-                float x = Mathf.Lerp(currentPos.x, targetPos.x, renderDeltaTime * 4f);
-                float y = Mathf.Lerp(currentPos.y, targetPos.y, renderDeltaTime * 8f);
-                float z = Mathf.Lerp(currentPos.z, targetPos.z, renderDeltaTime * 4f);
-
-                NPC.CachedTransform.position = new Vector3(x, y, z);
+                _npc.CachedTransform.position  = Vector3.Lerp(fromPosition, toPosition, alpha);
             }
 
-            float currentYaw = NPC.CachedTransform.eulerAngles.y;
-            float targetYaw = runtimeState.GetYaw();
-
-            float lerpedYaw = Mathf.LerpAngle(currentYaw, targetYaw, renderDeltaTime * 10f);
-
-            NPC.CachedTransform.rotation = Quaternion.Euler(0, lerpedYaw, 0);
-
-            UpdateVelocity(renderDeltaTime);
-            UpdateYawVelocity();
-            _npc.AnimationController.UpdateAnimatonForMovement(runtimeState, _localVelocity, _yawVelocity, renderDeltaTime);
+                //UpdateVelocity(renderDeltaTime);
+                UpdateYawVelocity();
+            //_npc.AnimationController.UpdateAnimatonForMovement(runtimeState, _localVelocity, _yawVelocity, renderDeltaTime);
         }
 
         private void UpdateVelocity(float renderDeltaTime)
         {
-            _worldVelocity = ((NPC.CachedTransform.position - _lastPosition) / renderDeltaTime);
-            _lastPosition = NPC.CachedTransform.position;
-            _localVelocity = NPC.CachedTransform.InverseTransformDirection(_worldVelocity);
+            _worldVelocity = ((_npc.CachedTransform.position - _lastPosition) / renderDeltaTime);
+            _lastPosition = _npc.CachedTransform.position;
+            _localVelocity = _npc.CachedTransform.InverseTransformDirection(_worldVelocity);
         }
 
         private void UpdateYawVelocity()
         {
-            Vector3 forward = _cachedTransform.forward;
+            Vector3 forward = _npc.CachedTransform.forward;
             float currentYaw = Mathf.Atan2(forward.x, forward.z) * Mathf.Rad2Deg;
             _yawVelocity = currentYaw - _lastYaw;
             _lastYaw = currentYaw;

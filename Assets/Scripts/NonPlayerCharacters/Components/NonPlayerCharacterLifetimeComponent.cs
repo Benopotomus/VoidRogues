@@ -18,16 +18,5 @@ namespace VoidRogues.NonPlayerCharacters
 
         public Action<int, int> OnLifetimeProgressChanged;
 
-        public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState, int tick)
-        {
-
-        }
-
-        public void UpdateLifetime(NonPlayerCharacterRuntimeState runtimeState,
-            bool hasAuthority,
-            int tick)
-        {
-            
-        }
     }
 }

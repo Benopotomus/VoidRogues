@@ -8,7 +8,7 @@ namespace VoidRogues.NonPlayerCharacters
 {
     public class NonPlayerCharacterSpawner
     {
-        public Action<FNonPlayerCharacterSpawnParams, NonPlayerCharacter> OnSpawned;
+        public Action<FNonPlayerCharacterData, int, NonPlayerCharacter> OnPrefabSpawned;
 
         public void SpawnNPC(ref FNonPlayerCharacterData data, int index)
         {
@@ -19,15 +19,6 @@ namespace VoidRogues.NonPlayerCharacters
                 Debug.LogWarning("Trying to spawn NPC with invalid definition, id: " + data.DefinitionID);
                 return;
             }
-
-            var spawnParams = new FNonPlayerCharacterSpawnParams
-            {
-                Index = index,
-                DefinitionId = data.DefinitionID,
-                Position = data.Position,
-                Rotation = data.Rotation,
-                TeamId = data.TeamID,
-            };
 
             BundleObject prefabBundle = definition.PrefabBundle;
 
@@ -45,13 +36,13 @@ namespace VoidRogues.NonPlayerCharacters
 
                 if (loadedBundle.BundleName == prefabBundle.Bundle)
                 {
-                    OnPrefabLoaded(spawnParams, loadedBundle);
+                    OnPrefabLoaded(data, index, loadedBundle);
                     return;
                 }
             }
 
             AssetBundleLoader prefabLoader = AssetBundleManager.Instance.LoadBundleObject(prefabBundle) as AssetBundleLoader;
-            NonPlayerCharacterLoader npcLoader = new NonPlayerCharacterLoader(spawnParams, prefabLoader);
+            NonPlayerCharacterLoader npcLoader = new NonPlayerCharacterLoader(data, index, prefabLoader);
 
             if (npcLoader.Loader != null)
             {
@@ -65,10 +56,10 @@ namespace VoidRogues.NonPlayerCharacters
         private void OnPrefabLoaded(NonPlayerCharacterLoader loader)
         {
             loader.OnLoadComplete -= OnPrefabLoaded;
-            OnPrefabLoaded(loader.SpawnParams, loader.Loader);
+            OnPrefabLoaded(loader.Data, loader.Index, loader.Loader);
         }
 
-        private void OnPrefabLoaded(FNonPlayerCharacterSpawnParams spawnParams, AssetBundleLoader loadedBundle)
+        private void OnPrefabLoaded(FNonPlayerCharacterData data, int index, AssetBundleLoader loadedBundle)
         {
             GameObject prefab = loadedBundle.GetAssetWithin<GameObject>();
 
@@ -78,11 +69,11 @@ namespace VoidRogues.NonPlayerCharacters
             var poolObject = prefab.GetComponent<DWDObjectPoolObject>();
             if (poolObject == null)
             {
-                Debug.LogWarning("Could not spawn NPC " + spawnParams.DefinitionId + ". Could not find DWDObjectPoolObject Component!");
+                Debug.LogWarning("Could not spawn NPC " + data.DefinitionID + ". Could not find DWDObjectPoolObject Component!");
                 return;
             }
 
-            var instance = DWDObjectPool.Instance.SpawnAt(poolObject, spawnParams.Position, spawnParams.Rotation);
+            var instance = DWDObjectPool.Instance.SpawnAt(poolObject, data.Position, data.Rotation);
 
             NonPlayerCharacter spawnedNPC = instance.GetComponent<NonPlayerCharacter>();
 
@@ -92,7 +83,7 @@ namespace VoidRogues.NonPlayerCharacters
                 return;
             }
 
-            OnSpawned?.Invoke(spawnParams, spawnedNPC);
+            OnPrefabSpawned?.Invoke(data, index, spawnedNPC);
         }
     }
 }

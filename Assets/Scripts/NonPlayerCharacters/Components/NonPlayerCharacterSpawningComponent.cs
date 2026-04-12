@@ -15,10 +15,11 @@ namespace VoidRogues.NonPlayerCharacters
 
         private int _spawnEndTick;
 
-        public void OnSpawned(NonPlayerCharacterRuntimeState runtimeState)
+        public void OnSpawned(ref FNonPlayerCharacterData data)
         {
         }
 
+        /*
         public void UpdateSpawningState(NonPlayerCharacterRuntimeState runtimeState, int tick)
         {
             if (tick > _spawnEndTick)
@@ -36,5 +37,6 @@ namespace VoidRogues.NonPlayerCharacters
 
             // TODO: Port visual effect spawning from LichLord
         }
+        */
     }
 }
