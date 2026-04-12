@@ -1542,8 +1542,8 @@ MonoBehaviour:
   _playerSeparationRadius: 1
   _npcSeparationRadius: 1
   _separationSkinWidth: 0.02
-  _pushStrength: 1
-  _pushSpeed: 3
+  _pushStrength: 0.446
+  _separationDecaySpeed: 5
 --- !u!4 &3000000000000003
 Transform:
   m_ObjectHideFlags: 0
