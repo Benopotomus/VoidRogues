@@ -320,6 +320,57 @@ namespace VoidRogues.NonPlayerCharacters
             }
         }
 
+        /// <summary>
+        /// Visual-only separation pass run on clients each render frame.
+        /// After the normal snapshot interpolation has placed every NPC at its
+        /// replicated position, this method nudges NPC transforms away from the
+        /// <em>locally-predicted</em> player position so that the push effect is
+        /// visible immediately — before the server-authoritative correction arrives
+        /// (~150 ms later at typical latency).
+        ///
+        /// Only the local player's position is used because that is the one position
+        /// the client knows precisely without round-trip delay (the KCC runs
+        /// client-side prediction).  No <see cref="FNonPlayerCharacterData"/> fields
+        /// are mutated; the adjustment is purely cosmetic and will be overwritten by
+        /// the next interpolation step on the following frame.
+        /// </summary>
+        private void ApplyPredictiveClientSeparation()
+        {
+            PlayerCharacter localPlayer = Context?.LocalPlayerCharacter;
+            if (localPlayer == null)
+                return;
+
+            float combined   = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
+            float combinedSq = combined * combined;
+
+            Vector3 playerPos = localPlayer.transform.position;
+
+            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            {
+                NPCViewEntry entry = pair.Value;
+                if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
+                    continue;
+
+                Transform npcTransform = entry.NPC.CachedTransform;
+                Vector3   npcPos       = npcTransform.position;
+
+                float dx     = npcPos.x - playerPos.x;
+                float dz     = npcPos.z - playerPos.z;
+                float distSq = dx * dx + dz * dz;
+
+                if (distSq >= combinedSq)
+                    continue;
+
+                float   dist    = distSq > EPSILON_SQUARED ? Mathf.Sqrt(distSq) : 0f;
+                float   overlap = combined - dist;
+                Vector3 pushDir = dist > DISTANCE_EPSILON
+                    ? new Vector3(dx / dist, 0f, dz / dist)
+                    : Vector3.right;
+
+                npcTransform.position = npcPos + pushDir * (overlap * _pushStrength);
+            }
+        }
+
         // RENDER UPDATE
         // RENDER - Cleaned up to match ProjectilePool style
         public override void Render()
@@ -420,6 +471,13 @@ namespace VoidRogues.NonPlayerCharacters
                     _views.Remove(key);
                 }
             }
+
+            // === 5. Predictive client-side separation ===
+            // Apply a visual-only push of NPC transforms away from the locally-predicted
+            // player position.  This runs only on non-authority clients and compensates
+            // for the ~RTT delay before the server-authoritative separation arrives.
+            if (!hasAuthority)
+                ApplyPredictiveClientSeparation();
 
             _viewCount = fromDataCount;
         }
