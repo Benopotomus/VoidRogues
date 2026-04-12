@@ -43,15 +43,6 @@ namespace VoidRogues.NonPlayerCharacters
                  "softer, more gradual blend-out.")]
         private float _separationDecaySpeed = 10f;
 
-        [SerializeField]
-        [Range(0.1f, 5f)]
-        [Tooltip("Maximum time (seconds) an NPC can stay in the predictive HELD state before " +
-                 "its entry is released so it can return to its server-authoritative position. " +
-                 "Prevents NPCs from appearing frozen at the player boundary when the player is " +
-                 "standing still.  The NPC will re-enter HELD from the correct direction on the " +
-                 "following frame if it is still inside the separation circle.")]
-        private float _heldReleaseTimeout = 0.5f;
-
         // Minimum squared magnitude used when checking whether a computed push vector is
         // effectively zero (avoids normalising near-zero vectors).
         private const float EPSILON_SQUARED = 1e-8f;
@@ -82,13 +73,6 @@ namespace VoidRogues.NonPlayerCharacters
         // Initial capacity: at ~150 ms RTT only NPCs within ~1 step of the player require
         // tracking — roughly 16 slots covers the common case without over-allocating.
         private readonly Dictionary<int, Vector3> _npcDisplayPositions = new Dictionary<int, Vector3>(16);
-
-        // Per-NPC accumulated time (seconds) spent continuously in the HELD state.
-        // Reset whenever the NPC exits HELD into DECAYING (server push acknowledged).
-        // When the accumulated time exceeds _heldReleaseTimeout the entry is removed so
-        // the NPC can return to its server-authoritative position rather than staying
-        // frozen at the boundary edge indefinitely.
-        private readonly Dictionary<int, float> _npcHeldTime = new Dictionary<int, float>(16);
         private List<int> _finishedViews = new List<int>(NonPlayerCharacterConstants.MAX_NPC_REPS); // For cleanup
         private int _viewCount;
 
@@ -382,17 +366,11 @@ namespace VoidRogues.NonPlayerCharacters
         ///   <item><b>HELD</b> – network position is inside the player circle (server push
         ///   hasn't arrived yet).  The display position is clamped to the circle edge in
         ///   the <em>same direction</em> as the last displayed position, preventing the
-        ///   interpolation from pulling the NPC through the player boundary.  A per-NPC
-        ///   timer (<see cref="_npcHeldTime"/>) releases the entry after
-        ///   <see cref="_heldReleaseTimeout"/> seconds so NPCs return to their
-        ///   server-authoritative positions when the player is stationary — without the
-        ///   timer, the HELD direction feeds from itself and locks the NPC to the wrong
-        ///   edge indefinitely.</item>
+        ///   interpolation from pulling the NPC through the player boundary.</item>
         ///   <item><b>DECAYING</b> – network position has exited the circle (server has
         ///   processed the push).  The display position smoothly moves toward the
         ///   authoritative network position at <see cref="_separationDecaySpeed"/>, but is
-        ///   never allowed to cross back inside the circle while converging.  Entering
-        ///   DECAYING resets the HELD timer.</item>
+        ///   never allowed to cross back inside the circle while converging.</item>
         /// </list>
         ///
         /// <para>
@@ -439,26 +417,6 @@ namespace VoidRogues.NonPlayerCharacters
                     // authoritative push hasn't reached us yet.  Pin the display position
                     // on the circle edge in the direction of the last displayed position so
                     // the NPC cannot lerp through the player as the interpolation catches up.
-                    //
-                    // Timeout: if the NPC has been continuously held for longer than
-                    // _heldReleaseTimeout, release the entry so the NPC can return to its
-                    // server position.  This prevents NPCs from staying frozen at the
-                    // boundary when the player is stationary (the HELD direction is derived
-                    // from lastDisplayPos which feeds into itself, permanently locking the
-                    // angle until the entry is cleared).  After release the NPC shows at its
-                    // network position for one frame, then re-enters HELD from the correct
-                    // direction on the following frame if still inside the circle.
-                    _npcHeldTime.TryGetValue(key, out float heldTime);
-                    heldTime += dt;
-                    if (heldTime >= _heldReleaseTimeout)
-                    {
-                        _npcDisplayPositions.Remove(key);
-                        _npcHeldTime.Remove(key);
-                        // OnRender already set the transform to networkPos; leave it there.
-                        continue;
-                    }
-                    _npcHeldTime[key] = heldTime;
-
                     Vector3 pushDir;
 
                     if (hasLastDisplay)
@@ -494,11 +452,6 @@ namespace VoidRogues.NonPlayerCharacters
                     // position back toward the authoritative network position at a fixed
                     // speed, but clamp it to stay outside the circle the whole way so the
                     // NPC never visually re-enters the player during convergence.
-                    //
-                    // Reset the HELD timer: the server acknowledged the push, so the NPC
-                    // is no longer "waiting" for authoritative separation.
-                    _npcHeldTime.Remove(key);
-
                     displayPos = Vector3.MoveTowards(lastDisplayPos, networkPos, _separationDecaySpeed * dt);
 
                     float ddx         = displayPos.x - playerPos.x;
@@ -653,7 +606,6 @@ namespace VoidRogues.NonPlayerCharacters
         private void ReturnView(int index, NPCViewEntry entry)
         {
             _npcDisplayPositions.Remove(index);
-            _npcHeldTime.Remove(index);
 
             if (entry.NPC != null)
             {
