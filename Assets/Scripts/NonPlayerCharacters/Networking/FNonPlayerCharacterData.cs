@@ -173,6 +173,31 @@ namespace VoidRogues.NonPlayerCharacters
             return _condition == other._condition;
         }
 
+        /// <summary>
+        /// True when this NPC is actively moving toward its steering target.
+        /// Set by the server in <c>FixedUpdateNetwork</c> Phase 2 and replicated to all peers.
+        /// Clients read this during Fusion resimulation to decide whether to integrate position.
+        /// Stored in bit 18 of <c>_configuration</c> (first free bit above the 4-bit FormationIndex).
+        /// </summary>
+        public bool IsMoving
+        {
+            get => (_configuration & (1 << 18)) != 0;
+            set
+            {
+                if (value)
+                    _configuration |= (1 << 18);
+                else
+                    _configuration &= ~(1 << 18);
+            }
+        }
+
+        /// <summary>
+        /// Convenience accessor for the NPC's current logical state without requiring a
+        /// <see cref="NonPlayerCharacterDataDefinition"/> reference.
+        /// Reads bits 0–3 of <c>_condition</c> (the NPC_STATE field).
+        /// </summary>
+        public ENPCState State => (ENPCState)(_condition & 0x0F);
+
         public bool IsBitSet(ref byte flags, int bit)
         {
             return (flags & (1 << bit)) == (1 << bit);
