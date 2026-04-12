@@ -10,6 +10,8 @@ namespace VoidRogues.NonPlayerCharacters
         private IAstarAI _follower;
         public IAstarAI AIFollower => _follower;
 
+        private FollowerEntity _followerEntity;
+
         [SerializeField] private Vector3 _worldVelocity;
         public Vector3 WorldVelocity => _worldVelocity;
 
@@ -43,13 +45,13 @@ namespace VoidRogues.NonPlayerCharacters
             _lastPosition = data.Position;
             _cachedTransform = transform;
             _follower = GetComponent<IAstarAI>();
+            _followerEntity = GetComponent<FollowerEntity>();
             if (_follower == null)
             {
-                var followerEntity = GetComponent<FollowerEntity>();
-                if (followerEntity == null)
-                    followerEntity = gameObject.AddComponent<FollowerEntity>();
+                if (_followerEntity == null)
+                    _followerEntity = gameObject.AddComponent<FollowerEntity>();
 
-                _follower = followerEntity;
+                _follower = _followerEntity;
             }
 
             if (_follower == null)
@@ -163,7 +165,13 @@ namespace VoidRogues.NonPlayerCharacters
 
         public void SetRVOSettings(bool locked, float priority = 0.5f)
         {
-            // TODO: Port RVO settings from LichLord (requires FollowerEntity)
+            if (_followerEntity == null)
+                return;
+
+            var settings = _followerEntity.rvoSettings;
+            settings.locked = locked;
+            settings.priority = priority;
+            _followerEntity.rvoSettings = settings;
         }
 
         public void StartRecycle()
@@ -174,6 +182,7 @@ namespace VoidRogues.NonPlayerCharacters
             SetMoveTargetPosition(Vector3.zero);
             SetFollowerLocalAvoidance(false);
             _follower = null;
+            _followerEntity = null;
         }
 
         private void UpdateYawVelocity()

@@ -281,7 +281,7 @@ MonoBehaviour:
       leadInRadiusWhenApproachingDestination: 1
       allowRotatingOnSpotBacking: 1
     debugFlags: 64
-    stopDistance: 0.2
+    stopDistance: 1.0
     rotationSmoothing: 0
     positionSmoothing: 0
     groundMask:
@@ -294,7 +294,7 @@ MonoBehaviour:
       obstacleTimeHorizon: 0.5
       maxNeighbours: 10
       layer: 1
-      collidesWith: -1
+      collidesWith: 1
       priority: 0.5
       debug: 0
       locked: 0
@@ -336,7 +336,7 @@ MonoBehaviour:
       - 1
       - 1
       tagEntryCosts: 0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000
-    enableLocalAvoidance: 0
+    enableLocalAvoidance: 1
     enableGravity: 1
   managedSettings:
     pathfindingSettings:
