@@ -107,6 +107,49 @@ Two complementary passes keep NPCs visually separated from players:
 - Only the *local* player is used; remote player positions carry the same network delay
   and would not improve perceived latency.
 
+#### Known Bug: Stationary-Player NPC Convergence Failure (fix planned for PR #50)
+
+**Root cause (offset-based tracking):**
+`_npcSeparationOffsets` stores `offset = displayPos − networkPos` per NPC.
+When `networkPos` sits *inside* the exclusion circle (server hasn't yet pushed the NPC
+out), the constraint clamp fires every frame and resets `offset` to
+`boundary − networkPos`, preventing it from ever decaying.  When the server finally
+pushes `networkPos` to the boundary the stale outward offset is *added on top*
+(`displayPos = newNetworkPos + oldOffset`), so the NPC visually overshoots further out
+than the server position; it then slowly decays back — during which it overlaps
+neighbouring NPCs that have already converged.  Net result: a stationary player keeps
+NPCs "glued" at (or past) the boundary, visually overlapping each other, instead of
+snapping back to their authoritative positions.
+
+**Fix — store display position, not offset:**
+Replace `Dictionary<int, Vector2> _npcSeparationOffsets` with
+`Dictionary<int, Vector3> _npcDisplayPositions` that tracks the full visual XZ position
+per NPC.  The new per-frame algorithm:
+
+1. Fetch `displayPos` from storage; if no entry exists, seed it to `networkPos`.
+2. `displayPos = Vector3.MoveTowards(displayPos, networkPos, _separationDecaySpeed * dt)`
+   — moves the visual position toward the server position at a fixed world-units/sec rate.
+3. Clamp: if `displayPos` is inside the exclusion circle, push it to the nearest point on
+   the circle boundary (same push-direction priority as before: stored direction first,
+   then `networkPos`-relative direction, then stable fallback).
+4. Convergence: if `|displayPos − networkPos|² < CONVERGENCE_THRESHOLD_SQUARED` and
+   `displayPos` is outside the circle, remove the entry and place the NPC exactly at
+   `networkPos`.
+5. Otherwise store `displayPos` and write it to `npcTransform.position`.
+
+**Why this fixes the bug:**
+- When `networkPos` is inside the circle, `displayPos` is clamped to the boundary and
+  stays there — it neither overshoots nor oscillates.
+- When the server pushes `networkPos` to the boundary, `displayPos` (already at the
+  boundary) is *immediately* within convergence threshold — the entry is removed and the
+  NPC snaps cleanly to its server position with zero visual correction remaining.
+- When the player is stationary and the server stabilises NPC positions, each NPC's
+  `displayPos` independently lerps to its own `networkPos`.  NPCs spread out naturally
+  following server authoritative data rather than all being pinned to the same circle
+  boundary point.
+- No timers, no state-machine transitions, no discrete jumps — purely continuous
+  `MoveTowards` + boundary clamp, so no popping.
+
 ### NPC prefab components (`NonPlayerCharacter : DWDObjectPoolObject`)
 
 The prefab at `Assets/NPCs/NonPlayerCharacter.prefab` has these serialized component
@@ -192,6 +235,7 @@ Unity Input System GUIDs:
 | #47 | `copilot/improve-latency-for-npcs` | NPC latency improvements |
 | #48 | `copilot/fix-npc-flickering-issue` | Removed client-side NPC prediction offset that caused flip/flicker |
 | #49 | `copilot/add-predictive-pushing` | Client-side predictive NPC separation (`ApplyPredictiveClientSeparation`) to eliminate ~150 ms push latency |
+| #50 (planned) | `copilot/fix-npc-separation-convergence` | Fix stationary-player NPC convergence: replace offset dict with display-position dict so `displayPos` MoveTowards `networkPos` + boundary clamp; NPCs return to server position smoothly instead of sticking at the exclusion boundary |
 
 ---
 
