@@ -66,13 +66,14 @@ namespace VoidRogues.NonPlayerCharacters
 
         private Dictionary<int, NPCViewEntry> _views = new Dictionary<int, NPCViewEntry>(NonPlayerCharacterConstants.MAX_NPC_REPS);
 
-        // Per-NPC XZ offsets (display - network position) persisted across render frames for
-        // smooth client-side separation.  An entry exists only while an NPC has a non-trivial
-        // offset; entries are removed once the offset converges to zero.  Cleared in ReturnView
-        // so recycled NPC indices start fresh.
+        // Per-NPC absolute display positions persisted across render frames for smooth
+        // client-side separation.  An entry exists only while an NPC's visual position differs
+        // non-trivially from its server-authoritative network position; entries are removed once
+        // the display position converges to the network position.  Cleared in ReturnView so
+        // recycled NPC indices start fresh.
         // Initial capacity: at ~150 ms RTT only NPCs within ~1 step of the player require
         // tracking — roughly 16 slots covers the common case without over-allocating.
-        private readonly Dictionary<int, Vector2> _npcSeparationOffsets = new Dictionary<int, Vector2>(16);
+        private readonly Dictionary<int, Vector3> _npcDisplayPositions = new Dictionary<int, Vector3>(16);
         private readonly List<int> _separationKeysToRemove = new List<int>(16);
         private List<int> _finishedViews = new List<int>(NonPlayerCharacterConstants.MAX_NPC_REPS); // For cleanup
         private int _viewCount;
@@ -347,25 +348,26 @@ namespace VoidRogues.NonPlayerCharacters
         /// Visual-only separation pass run on clients each render frame.
         ///
         /// <para>
-        /// Tracks a persistent XZ <em>offset</em> (display − network position) per NPC rather
-        /// than an absolute display position.  Each frame the offset magnitude is decayed toward
-        /// zero at <see cref="_separationDecaySpeed"/> units/sec, then a constraint clamps the
-        /// resulting display position to the outside of the player exclusion circle when needed.
+        /// Tracks an absolute display position per NPC (rather than a relative offset) so that
+        /// a moving player does not corrupt the stored state.  Each frame the display position
+        /// is moved toward the server-authoritative network position at
+        /// <see cref="_separationDecaySpeed"/> units/sec via <c>MoveTowards</c>, then clamped
+        /// to the outside of the player exclusion circle when needed.
         /// </para>
         ///
         /// <para>
-        /// This avoids the convergence failure of the previous state-machine approach: the old
-        /// DECAYING path used a straight-line <c>MoveTowards</c> from the last display position
-        /// to the network position, which could pass <em>through</em> the exclusion circle.  The
-        /// clamp then pinned the NPC back to the circle edge every frame and the convergence check
-        /// never fired, leaving NPCs permanently glued to the player boundary.
-        /// </para>
-        ///
-        /// <para>
-        /// Because the offset always decays monotonically toward zero the constraint only ever
-        /// keeps it at the minimum needed and never inflates it, so convergence is guaranteed.
-        /// There are no discrete state transitions (HELD / DECAYING / FREE), eliminating the
-        /// per-state jump artefacts that caused visible popping.
+        /// This fixes two bugs present in the previous offset-based approach:
+        /// <list type="bullet">
+        ///   <item>Moving player — stale relative offsets caused NPCs to snap to the front of
+        ///   the player as it moved, because the offset was computed relative to the old player
+        ///   position and then applied to the new network position.</item>
+        ///   <item>Stationary player — the constraint pinned displayPos to the exclusion
+        ///   boundary every frame, so convergence never fired and NPCs remained glued to the
+        ///   circle edge instead of returning to their server positions.</item>
+        /// </list>
+        /// Storing the absolute display position means that when the server pushes networkPos
+        /// to the boundary, displayPos (already at the boundary) is immediately within the
+        /// convergence threshold and the entry is cleanly removed.
         /// </para>
         ///
         /// <para>
@@ -384,7 +386,7 @@ namespace VoidRogues.NonPlayerCharacters
 
             Vector3 playerPos = localPlayer.transform.position;
             float   dt        = Time.deltaTime;
-            float   decay     = _separationDecaySpeed * dt;
+            float   step      = _separationDecaySpeed * dt;
 
             _separationKeysToRemove.Clear();
 
@@ -400,85 +402,87 @@ namespace VoidRogues.NonPlayerCharacters
                 // networkPos: where OnRender just placed the NPC via snapshot interpolation.
                 Vector3 networkPos = npcTransform.position;
 
-                // Retrieve the current offset (zero if no entry exists).
-                _npcSeparationOffsets.TryGetValue(key, out Vector2 offset);
-
-                // XZ distance check from the local player to the network position.
+                // XZ distance from player to network position.
                 float ndx       = networkPos.x - playerPos.x;
                 float ndz       = networkPos.z - playerPos.z;
                 float netDistSq = ndx * ndx + ndz * ndz;
 
-                bool needsConstraint = netDistSq < combinedSq;
+                bool networkInsideCircle = netDistSq < combinedSq;
 
-                // If neither the network position overlaps nor we have a live offset, skip.
-                if (!needsConstraint && offset.sqrMagnitude < CONVERGENCE_THRESHOLD_SQUARED)
-                    continue;
+                // Retrieve stored display position; seed to networkPos on first encounter.
+                if (!_npcDisplayPositions.TryGetValue(key, out Vector3 displayPos))
+                {
+                    // No active entry — only start tracking if the network position is inside
+                    // the exclusion circle (i.e. a push is actually needed right now).
+                    if (!networkInsideCircle)
+                        continue;
 
-                // ── Step 1: decay the offset magnitude toward zero ────────────────────
-                float offsetMag = offset.magnitude;
-                if (offsetMag > decay)
-                {
-                    float newMag = offsetMag - decay;
-                    offset = offset * (newMag / offsetMag);
-                }
-                else
-                {
-                    offset = Vector2.zero;
+                    displayPos = networkPos;
                 }
 
-                // ── Step 2: compute candidate display position ────────────────────────
-                Vector3 displayPos = new Vector3(
-                    networkPos.x + offset.x,
-                    networkPos.y,
-                    networkPos.z + offset.y);
+                // ── Step 1: move display position toward network position ─────────────
+                displayPos = Vector3.MoveTowards(displayPos, networkPos, step);
 
-                // ── Step 3: constrain display position outside the exclusion circle ───
+                // ── Step 2: clamp display position outside the exclusion circle ────────
                 float ddx         = displayPos.x - playerPos.x;
                 float ddz         = displayPos.z - playerPos.z;
                 float displayDistSq = ddx * ddx + ddz * ddz;
 
                 if (displayDistSq < combinedSq)
                 {
-                    // Determine push direction: prefer the current offset direction, fall
-                    // back to the network-position direction, then a stable default.
-                    Vector2 pushDir2D;
-                    if (offset.sqrMagnitude > EPSILON_SQUARED)
+                    // Determine push direction: prefer display-relative direction, fall back
+                    // to network-position direction, then a stable world-space default.
+                    float pdx = displayPos.x - playerPos.x;
+                    float pdz = displayPos.z - playerPos.z;
+                    float pdSq = pdx * pdx + pdz * pdz;
+
+                    float pushDirX, pushDirZ;
+                    if (pdSq > EPSILON_SQUARED)
                     {
-                        pushDir2D = offset.normalized;
+                        float inv = 1f / Mathf.Sqrt(pdSq);
+                        pushDirX = pdx * inv;
+                        pushDirZ = pdz * inv;
                     }
                     else if (netDistSq > EPSILON_SQUARED)
                     {
-                        float invNetDist = 1f / Mathf.Sqrt(netDistSq);
-                        pushDir2D = new Vector2(ndx * invNetDist, ndz * invNetDist);
+                        float inv = 1f / Mathf.Sqrt(netDistSq);
+                        pushDirX = ndx * inv;
+                        pushDirZ = ndz * inv;
                     }
                     else
                     {
-                        pushDir2D = Vector2.right;
+                        pushDirX = 1f;
+                        pushDirZ = 0f;
                     }
 
                     displayPos = new Vector3(
-                        playerPos.x + pushDir2D.x * combined,
+                        playerPos.x + pushDirX * combined,
                         networkPos.y,
-                        playerPos.z + pushDir2D.y * combined);
-
-                    offset = new Vector2(displayPos.x - networkPos.x, displayPos.z - networkPos.z);
+                        playerPos.z + pushDirZ * combined);
                 }
 
-                // ── Step 4: check convergence ─────────────────────────────────────────
-                if (offset.sqrMagnitude < CONVERGENCE_THRESHOLD_SQUARED)
+                // ── Step 3: check convergence ─────────────────────────────────────────
+                // Only converge when displayPos is outside (or on) the circle to avoid
+                // removing the entry while a constraint is still active.
+                float convDx = displayPos.x - networkPos.x;
+                float convDz = displayPos.z - networkPos.z;
+                bool outsideCircle = (displayPos.x - playerPos.x) * (displayPos.x - playerPos.x) +
+                                     (displayPos.z - playerPos.z) * (displayPos.z - playerPos.z) >= combinedSq;
+
+                if (outsideCircle && convDx * convDx + convDz * convDz < CONVERGENCE_THRESHOLD_SQUARED)
                 {
                     _separationKeysToRemove.Add(key);
                     npcTransform.position = networkPos;
                     continue;
                 }
 
-                _npcSeparationOffsets[key] = offset;
-                npcTransform.position      = displayPos;
+                _npcDisplayPositions[key] = displayPos;
+                npcTransform.position     = displayPos;
             }
 
             // Remove converged entries outside the foreach to avoid modifying while iterating.
             for (int i = 0; i < _separationKeysToRemove.Count; i++)
-                _npcSeparationOffsets.Remove(_separationKeysToRemove[i]);
+                _npcDisplayPositions.Remove(_separationKeysToRemove[i]);
         }
 
         // RENDER UPDATE
@@ -594,7 +598,7 @@ namespace VoidRogues.NonPlayerCharacters
 
         private void ReturnView(int index, NPCViewEntry entry)
         {
-            _npcSeparationOffsets.Remove(index);
+            _npcDisplayPositions.Remove(index);
 
             if (entry.NPC != null)
             {
