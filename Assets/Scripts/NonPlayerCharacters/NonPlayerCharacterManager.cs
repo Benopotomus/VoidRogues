@@ -12,6 +12,28 @@ namespace VoidRogues.NonPlayerCharacters
         [Tooltip("Enable detailed logging for NPC spawning, loading, and state changes")]
         private bool verboseLogging = false;
 
+        [Header("Player-NPC Separation (Vampire Survivors style)")]
+        [SerializeField]
+        [Tooltip("Logical radius of the player used for player-NPC overlap tests (world units). " +
+                 "Should match the KCC capsule radius on the PlayerCharacter prefab.")]
+        private float _playerSeparationRadius = 0.35f;
+
+        [SerializeField]
+        [Tooltip("Logical radius of each NPC used for player-NPC overlap tests (world units).")]
+        private float _npcSeparationRadius = 0.4f;
+
+        [SerializeField]
+        [Tooltip("Extra gap added on top of the combined radius to prevent tight sliding contact.")]
+        private float _separationSkinWidth = 0.02f;
+
+        // Minimum squared magnitude used when checking whether a computed push vector is
+        // effectively zero (avoids normalising near-zero vectors).
+        private const float EPSILON_SQUARED = 1e-8f;
+
+        // Minimum XZ distance at which we consider two centres non-coincident and can
+        // derive a reliable push direction from their delta.
+        private const float DISTANCE_EPSILON = 1e-4f;
+
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
 
@@ -217,6 +239,78 @@ namespace VoidRogues.NonPlayerCharacters
                     entry.NPC.OnFixedUpdateNetwork(ref data, tick, hasAuthority);
                 }
             }
+
+            // After all NPC positions are captured for this tick, apply player-NPC
+            // separation on the server so NPCs are pushed away from every player
+            // (Vampire Survivors style: players walk through enemies freely).
+            if (hasAuthority)
+                ApplyPlayerNPCSeparation();
+        }
+
+        /// <summary>
+        /// Iterates every active NPC and pushes it away from any player whose circle
+        /// overlaps the NPC's circle on the XZ plane.  Runs server-side only so the
+        /// authoritative <c>FNonPlayerCharacterData.Position</c> values are updated and
+        /// replicated to all clients.
+        ///
+        /// The player is intentionally never deflected — only NPCs move.
+        /// </summary>
+        private void ApplyPlayerNPCSeparation()
+        {
+            var players = Runner.GetAllBehaviours<PlayerCharacter>();
+            if (players == null || players.Count == 0)
+                return;
+
+            float combined   = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
+            float combinedSq = combined * combined;
+
+            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            {
+                NPCViewEntry entry = pair.Value;
+                if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
+                    continue;
+
+                ref FNonPlayerCharacterData data = ref _npcDatas.GetRef(pair.Key);
+                if (data.DefinitionID == 0)
+                    continue;
+
+                Vector3 npcPos    = data.Position;
+                Vector3 totalPush = Vector3.zero;
+
+                foreach (PlayerCharacter player in players)
+                {
+                    if (player == null)
+                        continue;
+
+                    Vector3 playerPos = player.transform.position;
+
+                    // XZ-only distance (top-down game; ignore height difference).
+                    float dx = npcPos.x - playerPos.x;
+                    float dz = npcPos.z - playerPos.z;
+                    float distSq = dx * dx + dz * dz;
+
+                    if (distSq >= combinedSq)
+                        continue;  // No overlap.
+
+                    float dist    = distSq > EPSILON_SQUARED ? Mathf.Sqrt(distSq) : 0f;
+                    float overlap = combined - dist;
+
+                    Vector3 pushDir;
+                    if (dist > DISTANCE_EPSILON)
+                        pushDir = new Vector3(dx / dist, 0f, dz / dist);
+                    else
+                        pushDir = Vector3.right;  // Coincident centres — stable fallback.
+
+                    totalPush += pushDir * overlap;
+                }
+
+                if (totalPush.sqrMagnitude < EPSILON_SQUARED)
+                    continue;
+
+                Vector3 newPos = npcPos + totalPush;
+                data.Position = newPos;
+                entry.NPC.TeleportToPosition(newPos);
+            }
         }
 
         // RENDER UPDATE
@@ -321,6 +415,68 @@ namespace VoidRogues.NonPlayerCharacters
             }
 
             _viewCount = fromDataCount;
+
+            // === 5. Client-side predicted NPC push (latency cover) ===
+            // The server writes authoritative pushed NPC positions into FNonPlayerCharacterData
+            // each tick, but the client must wait one round-trip (~one-way latency) before
+            // receiving those updates. At 150 ms one-way latency the client sees NPCs at their
+            // un-pushed snapshot positions for several frames while the player walks through
+            // them. To eliminate that visual pop, apply the same XZ separation logic here
+            // using the local player's current render-time transform position. Only the
+            // CachedTransform (visual) is moved — no networked state is written — so the
+            // server correction that arrives next converges cleanly rather than causing a
+            // position hitch.
+            if (!hasAuthority)
+                ApplyClientSidePredictedSeparation();
+        }
+
+        /// <summary>
+        /// Runs on non-authority clients each render frame to visually push NPC transforms
+        /// away from the local observed player, covering one-way replication latency (up to
+        /// 150 ms) without waiting for the next server snapshot.
+        ///
+        /// <b>No network state is written.</b>  Only <c>NonPlayerCharacter.CachedTransform.position</c>
+        /// is adjusted.  The server independently applies the same separation each tick and
+        /// replicates the corrected positions, so the visual prediction converges smoothly with
+        /// the authoritative data rather than producing a correction pop.
+        /// </summary>
+        private void ApplyClientSidePredictedSeparation()
+        {
+            PlayerCharacter localPlayer = Context?.ObservedPlayerCharacter;
+            if (localPlayer == null)
+                return;
+
+            Vector3 playerPos  = localPlayer.transform.position;
+            float combined     = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
+            float combinedSq   = combined * combined;
+
+            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            {
+                NPCViewEntry entry = pair.Value;
+                if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
+                    continue;
+
+                Transform npcTransform = entry.NPC.CachedTransform;
+                Vector3   npcPos       = npcTransform.position;
+
+                float dx     = npcPos.x - playerPos.x;
+                float dz     = npcPos.z - playerPos.z;
+                float distSq = dx * dx + dz * dz;
+
+                if (distSq >= combinedSq)
+                    continue;
+
+                float dist    = distSq > EPSILON_SQUARED ? Mathf.Sqrt(distSq) : 0f;
+                float overlap = combined - dist;
+
+                Vector3 pushDir;
+                if (dist > DISTANCE_EPSILON)
+                    pushDir = new Vector3(dx / dist, 0f, dz / dist);
+                else
+                    pushDir = Vector3.right;  // Coincident centres — stable fallback.
+
+                npcTransform.position = npcPos + pushDir * overlap;
+            }
         }
 
         private void ReturnView(int index, NPCViewEntry entry)

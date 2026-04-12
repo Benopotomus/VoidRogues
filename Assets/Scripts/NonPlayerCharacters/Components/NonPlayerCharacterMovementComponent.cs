@@ -181,6 +181,18 @@ namespace VoidRogues.NonPlayerCharacters
             _followerEntity.rvoSettings = settings;
         }
 
+        /// <summary>
+        /// Instantly moves the pathfinding agent to <paramref name="position"/> without
+        /// recalculating the current path.  Used by the server-side player-NPC separation
+        /// pass so the FollowerEntity's internal position stays consistent with the
+        /// authoritative <c>FNonPlayerCharacterData.Position</c> after each push.
+        /// </summary>
+        public void TeleportToPosition(Vector3 position)
+        {
+            if (_follower != null)
+                _follower.Teleport(position, clearPath: false);
+        }
+
         public void StartRecycle()
         {
             SetFollowerUpdatePosition(false);
