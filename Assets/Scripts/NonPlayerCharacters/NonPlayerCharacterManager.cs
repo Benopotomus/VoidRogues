@@ -12,7 +12,7 @@ namespace VoidRogues.NonPlayerCharacters
         [Tooltip("Enable detailed logging for NPC spawning, loading, and state changes")]
         private bool verboseLogging = false;
 
-        [Header("Player-NPC Separation (Vampire Survivors style)")]
+        [Header("Player-NPC Separation – Push Radius")]
         [SerializeField]
         [Tooltip("Logical radius of the player used for player-NPC overlap tests (world units). " +
                  "Should match the KCC capsule radius on the PlayerCharacter prefab.")]
@@ -25,6 +25,23 @@ namespace VoidRogues.NonPlayerCharacters
         [SerializeField]
         [Tooltip("Extra gap added on top of the combined radius to prevent tight sliding contact.")]
         private float _separationSkinWidth = 0.02f;
+
+        [Header("Player-NPC Separation – Push Strength & Speed")]
+        [SerializeField]
+        [Range(0f, 1f)]
+        [Tooltip("Fraction of the overlap resolved per server tick (0 = no push, 1 = instant full " +
+                 "separation). Values below 1 smooth the push over several ticks and reduce the " +
+                 "perceived snap when latency is high.")]
+        private float _pushStrength = 1.0f;
+
+        [SerializeField]
+        [Tooltip("Maximum speed (world units per second) at which the client-side predicted NPC " +
+                 "visual is pushed away from the local player each render frame. Capping this " +
+                 "prevents the visual from over-shooting the authoritative server position while " +
+                 "the correction is still in transit, eliminating the warp-and-snap artefact at " +
+                 "high latency (≥ 150 ms). Tune alongside _pushStrength; a good starting pair is " +
+                 "strength = 0.8, speed = 3.0.")]
+        private float _pushSpeed = 3.0f;
 
         // Minimum squared magnitude used when checking whether a computed push vector is
         // effectively zero (avoids normalising near-zero vectors).
@@ -301,7 +318,7 @@ namespace VoidRogues.NonPlayerCharacters
                     else
                         pushDir = Vector3.right;  // Coincident centres — stable fallback.
 
-                    totalPush += pushDir * overlap;
+                    totalPush += pushDir * (overlap * _pushStrength);
                 }
 
                 if (totalPush.sqrMagnitude < EPSILON_SQUARED)
@@ -433,12 +450,22 @@ namespace VoidRogues.NonPlayerCharacters
         /// <summary>
         /// Runs on non-authority clients each render frame to visually push NPC transforms
         /// away from the local observed player, covering one-way replication latency (up to
-        /// 150 ms) without waiting for the next server snapshot.
+        /// ~150 ms) without waiting for the next server snapshot.
         ///
         /// <b>No network state is written.</b>  Only <c>NonPlayerCharacter.CachedTransform.position</c>
         /// is adjusted.  The server independently applies the same separation each tick and
         /// replicates the corrected positions, so the visual prediction converges smoothly with
-        /// the authoritative data rather than producing a correction pop.
+        /// the authoritative data.
+        ///
+        /// The push applied per frame is capped to <c>_pushSpeed * Time.deltaTime</c> world units.
+        /// This prevents the visual from over-shooting the authoritative server position while
+        /// the correction is still in transit, which was the root cause of the warp-and-snap
+        /// artefact seen at ≥ 150 ms latency: the old code teleported by the full overlap every
+        /// frame, so when the server snapshot (with the already-pushed position) arrived,
+        /// <see cref="Render"/> would reset to the server value and the next frame would
+        /// over-push again, creating an oscillation.  By capping the per-frame nudge to a small
+        /// velocity-driven amount the client position stays close enough to the authoritative
+        /// value that server corrections produce no visible snap.
         /// </summary>
         private void ApplyClientSidePredictedSeparation()
         {
@@ -449,6 +476,12 @@ namespace VoidRogues.NonPlayerCharacters
             Vector3 playerPos  = localPlayer.transform.position;
             float combined     = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
             float combinedSq   = combined * combined;
+
+            // Maximum distance this NPC visual may be nudged in a single render frame.
+            // Capping by speed * dt keeps the prediction gentle so that arriving server
+            // corrections (which already contain the authoritative pushed position) never
+            // cause a noticeable snap.
+            float maxMoveThisFrame = _pushSpeed * Time.deltaTime;
 
             foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
             {
@@ -475,7 +508,10 @@ namespace VoidRogues.NonPlayerCharacters
                 else
                     pushDir = Vector3.right;  // Coincident centres — stable fallback.
 
-                npcTransform.position = npcPos + pushDir * overlap;
+                // Apply at most _pushStrength of the overlap, further capped by the
+                // per-frame speed budget to avoid fighting the server interpolation.
+                float pushAmount = Mathf.Min(overlap * _pushStrength, maxMoveThisFrame);
+                npcTransform.position = npcPos + pushDir * pushAmount;
             }
         }
 
