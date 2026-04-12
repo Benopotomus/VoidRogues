@@ -49,12 +49,16 @@ namespace Fusion.Addons.Physics {
     }
 
     /// <inheritdoc/>
-    protected override void CaptureRBPositionRotation(Rigidbody2D rb, ref NetworkRBData data) {
-      data.TRSPData.Position = rb.position;
+    protected override void CaptureRBPositionRotation(Rigidbody2D rb, ref NetworkRBData data, bool useWorldSpace) {
+      
+      var pos = useWorldSpace ? (Vector3)rb.position : rb.transform.localPosition;
+      var rot = useWorldSpace ? rb.rotation : rb.transform.eulerAngles.z;
+
+      data.TRSPData.Position = pos;
       if (UsePreciseRotation) {
-        data.FullPrecisionRotation = Quaternion.Euler(0, 0, rb.rotation);
+        data.FullPrecisionRotation = Quaternion.Euler(0, 0, rot);
       } else {
-        data.TRSPData.Rotation = Quaternion.Euler(0, 0, rb.rotation);
+        data.TRSPData.Rotation = Quaternion.Euler(0, 0, rot);
       }
     }
     /// <inheritdoc/>
@@ -90,9 +94,9 @@ namespace Fusion.Addons.Physics {
       data.Drag              = rb.drag;
       data.AngularDrag       = rb.angularDrag;
       data.LinearVelocity    = rb.velocity;
+#endif
       data.AngularVelocity2D = rb.angularVelocity;
       data.GravityScale2D    = rb.gravityScale;
-#endif
     }
 
     /// <inheritdoc/>

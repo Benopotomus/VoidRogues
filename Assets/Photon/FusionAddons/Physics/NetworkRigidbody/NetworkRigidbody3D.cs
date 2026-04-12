@@ -47,12 +47,16 @@ namespace Fusion.Addons.Physics {
     }
 
     /// <inheritdoc/>
-    protected override void CaptureRBPositionRotation(Rigidbody rb, ref NetworkRBData data) {
-      data.TRSPData.Position = rb.position;
+    protected override void CaptureRBPositionRotation(Rigidbody rb, ref NetworkRBData data, bool useWorldSpace) {
+      
+      var pos = useWorldSpace ? rb.position : rb.transform.localPosition;
+      var rot = useWorldSpace ? rb.rotation : rb.transform.localRotation;
+      
+      data.TRSPData.Position = pos;
       if (UsePreciseRotation) {
-        data.FullPrecisionRotation = rb.rotation;
+        data.FullPrecisionRotation = rot;
       } else {
-        data.TRSPData.Rotation = rb.rotation;
+        data.TRSPData.Rotation = rot;
       }
     }
     /// <inheritdoc/>

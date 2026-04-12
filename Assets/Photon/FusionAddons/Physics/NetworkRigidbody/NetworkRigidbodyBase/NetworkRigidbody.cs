@@ -58,7 +58,7 @@ namespace Fusion.Addons.Physics {
       }
 
       EnsureHasRunnerSimulatePhysics();
-      _clientPrediction = Runner.Topology != Topologies.Shared && (Runner.IsServer || _physicsSimulator.ClientPhysicsSimulation == ClientPhysicsSimulation.SimulateAlways);
+      _clientPrediction = Runner.Topology != Topologies.Shared && (Runner.IsServer || _physicsSimulator.ClientPhysicsSimulation == ClientPhysicsSimulation.SimulateAlways || _physicsSimulator.ClientPhysicsSimulation == ClientPhysicsSimulation.SimulateForward);
 
       if (HasStateAuthority) {
         CopyToBuffer(false);
@@ -94,8 +94,13 @@ namespace Fusion.Addons.Physics {
 
     /// <inheritdoc/>
     public override void Despawned(NetworkRunner runner, bool hasState) {
+      // Should not be possible but to avoid errors, check.
+      if (_rigidbody)
+      {
+        ResetRigidbody();
+      }
+      
       base.Despawned(runner, hasState);
-      ResetRigidbody();
     }
 
     /// <summary>
