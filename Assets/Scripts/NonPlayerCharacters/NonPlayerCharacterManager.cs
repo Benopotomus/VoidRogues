@@ -418,21 +418,22 @@ namespace VoidRogues.NonPlayerCharacters
 
             // === 5. Client-side predicted NPC push (latency cover) ===
             // The server writes authoritative pushed NPC positions into FNonPlayerCharacterData
-            // each tick, but replication latency (~150 ms at 150 ms ping) means clients see
-            // NPCs at their un-pushed snapshot positions for several frames while they walk
-            // through the player. To eliminate that visual pop without waiting for the server
-            // round-trip, apply the same XZ separation logic here using the local player's
-            // current render-time transform position. Only the CachedTransform (visual) is
-            // moved — no networked state is written — so the server correction that arrives
-            // next converges cleanly rather than causing a position hitch.
+            // each tick, but the client must wait one round-trip (~one-way latency) before
+            // receiving those updates. At 150 ms one-way latency the client sees NPCs at their
+            // un-pushed snapshot positions for several frames while the player walks through
+            // them. To eliminate that visual pop, apply the same XZ separation logic here
+            // using the local player's current render-time transform position. Only the
+            // CachedTransform (visual) is moved — no networked state is written — so the
+            // server correction that arrives next converges cleanly rather than causing a
+            // position hitch.
             if (!hasAuthority)
                 ApplyClientSidePredictedSeparation();
         }
 
         /// <summary>
         /// Runs on non-authority clients each render frame to visually push NPC transforms
-        /// away from the local observed player, covering replication latency (~150 ms) without
-        /// waiting for the next server snapshot.
+        /// away from the local observed player, covering one-way replication latency (up to
+        /// 150 ms) without waiting for the next server snapshot.
         ///
         /// <b>No network state is written.</b>  Only <c>NonPlayerCharacter.CachedTransform.position</c>
         /// is adjusted.  The server independently applies the same separation each tick and
