@@ -72,11 +72,40 @@ Max NPC count: `NonPlayerCharacterConstants.MAX_NPC_REPS = 800`.
 - `[Networked, Capacity(800)] NetworkArray<FNonPlayerCharacterData> _npcDatas`
 - `[Networked] int _dataCount`
 - `FixedUpdateNetwork`: server-authoritative NPC tick + **player-NPC separation pass**
-  (push NPCs away from players; players never deflected — Vampire Survivors style).
+  (`ApplyPlayerNPCSeparation`) — push NPCs away from players; players never deflected
+  (Vampire Survivors style).
 - `Render`: interpolation between `fromBuffer` / `toBuffer` snapshots using
   `TryGetSnapshotsBuffers`. Ring-buffer indexing: `key % MAX_NPC_REPS`.
+  After interpolation, calls `ApplyPredictiveClientSeparation()` on non-authority clients.
 - `_views`: `Dictionary<int, NPCViewEntry>` (view-index → entry).
 - Spawning: async via `NonPlayerCharacterSpawner`, callback `OnNPC_Loaded`.
+
+### Player-NPC Separation
+
+Two complementary passes keep NPCs visually separated from players:
+
+**Server-side (`ApplyPlayerNPCSeparation`, runs in `FixedUpdateNetwork`):**
+- Iterates all active NPCs and all `PlayerCharacter` instances via `Runner.GetAllBehaviours`.
+- XZ-only distance check with `combined = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth`.
+- On overlap: accumulates a push vector per NPC, writes the new position into
+  `FNonPlayerCharacterData.Position`, and calls `entry.NPC.TeleportToPosition(newPos)` so
+  the `FollowerEntity` internal state stays consistent.
+- Only NPCs are pushed; players are never deflected.
+- Tunable via serialized fields: `_playerSeparationRadius`, `_npcSeparationRadius`,
+  `_separationSkinWidth`, `_pushStrength`.
+
+**Client-side predictive (`ApplyPredictiveClientSeparation`, runs in `Render`):**
+- Runs only when `!hasAuthority` (non-server clients).
+- After snapshot interpolation places all NPC transforms, applies the same push math
+  against `Context.LocalPlayerCharacter.transform.position` — the KCC-predicted player
+  position that is already client-side predicted with no round-trip delay.
+- Writes directly to `CachedTransform.position`. **Does not mutate any
+  `FNonPlayerCharacterData` fields** — purely visual; overwritten by interpolation
+  on the next frame.
+- Eliminates the ~RTT (≈150 ms) visible delay where NPCs appear to overlap the player
+  before the server correction arrives.
+- Only the *local* player is used; remote player positions carry the same network delay
+  and would not improve perceived latency.
 
 ### NPC prefab components (`NonPlayerCharacter : DWDObjectPoolObject`)
 
@@ -162,6 +191,7 @@ Unity Input System GUIDs:
 |----|--------|-------------|
 | #47 | `copilot/improve-latency-for-npcs` | NPC latency improvements |
 | #48 | `copilot/fix-npc-flickering-issue` | Removed client-side NPC prediction offset that caused flip/flicker |
+| #49 | `copilot/add-predictive-pushing` | Client-side predictive NPC separation (`ApplyPredictiveClientSeparation`) to eliminate ~150 ms push latency |
 
 ---
 
