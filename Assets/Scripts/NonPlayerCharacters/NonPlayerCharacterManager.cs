@@ -51,6 +51,11 @@ namespace VoidRogues.NonPlayerCharacters
         // derive a reliable push direction from their delta.
         private const float DISTANCE_EPSILON = 1e-4f;
 
+        // Squared distance threshold used to decide when the client display position has
+        // converged closely enough to the network position that tracking can stop.
+        // (0.01 units ² ≈ 1 cm round-trip, imperceptible at game scale.)
+        private const float CONVERGENCE_THRESHOLD_SQUARED = 1e-4f;
+
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
 
@@ -65,7 +70,9 @@ namespace VoidRogues.NonPlayerCharacters
         // separation.  Only entries for NPCs that are currently being held or decayed are stored;
         // NPCs in the FREE state (network pos already outside player circle, no offset) have no
         // entry here.  Cleared when a view is returned so recycled NPC indices start fresh.
-        private readonly Dictionary<int, Vector3> _npcDisplayPositions = new Dictionary<int, Vector3>(32);
+        // Initial capacity: at ~150 ms RTT only NPCs within ~1 step of the player require
+        // tracking — roughly 16 slots covers the common case without over-allocating.
+        private readonly Dictionary<int, Vector3> _npcDisplayPositions = new Dictionary<int, Vector3>(16);
         private List<int> _finishedViews = new List<int>(NonPlayerCharacterConstants.MAX_NPC_REPS); // For cleanup
         private int _viewCount;
 
@@ -465,7 +472,7 @@ namespace VoidRogues.NonPlayerCharacters
 
                     // Once we've converged with the network position, exit tracking so
                     // future frames skip the dictionary lookup entirely for this NPC.
-                    if ((displayPos - networkPos).sqrMagnitude < 1e-4f)
+                    if ((displayPos - networkPos).sqrMagnitude < CONVERGENCE_THRESHOLD_SQUARED)
                     {
                         _npcDisplayPositions.Remove(key);
                         npcTransform.position = networkPos;
