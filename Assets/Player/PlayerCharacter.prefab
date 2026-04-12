@@ -227,6 +227,7 @@ MonoBehaviour:
     - {fileID: 561824206424634091, guid: 68c4081a63f1dfd469da9c95bea22158, type: 3}
     - {fileID: 8306782452827789390, guid: 6d976f9777012db4aa55e7e6b1991afe, type: 3}
     - {fileID: 2938471620583741237, guid: 78a44568f4c845f4bdb8e72494de53f8, type: 3}
+    - {fileID: 5714823096318475204, guid: dcca239b1d394d789dc9d2b66a83c299, type: 3}
     MaxPenetrationSteps: 8
     CCDRadiusMultiplier: 0.75
     AntiJitterDistance: {x: 0.025, y: 0.01}
