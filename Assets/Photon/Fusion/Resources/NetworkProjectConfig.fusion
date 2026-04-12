@@ -21,10 +21,10 @@
         "SimulationUpdateTimeMode": 0,
         "PlayerCount": 10,
         "TickRateSelection": {
-            "Client": 64,
+            "Client": 60,
             "ServerIndex": 0,
             "ClientSendIndex": 1,
-            "ServerSendIndex": 1
+            "ServerSendIndex": 2
         },
         "MaxObjectDestroysSentPerPacket": 32,
         "EnableExperimentalPacketLossRecovery": false,
@@ -43,7 +43,7 @@
         "EnableEncryption": false
     },
     "NetworkConditions": {
-        "Enabled": false,
+        "Enabled": true,
         "DelayShape": 0,
         "DelayMin": 0.15,
         "DelayMax": 0.15,

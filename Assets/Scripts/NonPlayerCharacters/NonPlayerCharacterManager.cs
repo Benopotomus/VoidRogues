@@ -27,7 +27,6 @@ namespace VoidRogues.NonPlayerCharacters
         public Action<NonPlayerCharacter> OnCharacterSpawned;
         public Action<NonPlayerCharacter> OnCharacterDespawned;
 
-
         private ArrayReader<FNonPlayerCharacterData> _dataBufferReader;
         protected PropertyReader<int> _dataCountReader;
 
