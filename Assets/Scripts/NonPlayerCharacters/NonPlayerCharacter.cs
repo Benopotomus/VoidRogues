@@ -111,6 +111,16 @@ namespace VoidRogues.NonPlayerCharacters
                 _movementComponent.OnFixedNetworkUpdate(ref data, tick);
         }
 
+        /// <summary>
+        /// Instantly moves this NPC to <paramref name="position"/> via the pathfinding agent.
+        /// Called by the server-side player-NPC separation pass after pushing
+        /// <c>FNonPlayerCharacterData.Position</c> so the FollowerEntity stays in sync.
+        /// </summary>
+        public void TeleportToPosition(Vector3 position)
+        {
+            _movementComponent.TeleportToPosition(position);
+        }
+
         public void StartRecycle()
         {
             _movementComponent.StartRecycle();

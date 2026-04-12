@@ -2,6 +2,7 @@ using Fusion;
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using VoidRogues;
 
 namespace VoidRogues.NonPlayerCharacters
 {
@@ -11,6 +12,20 @@ namespace VoidRogues.NonPlayerCharacters
         [SerializeField]
         [Tooltip("Enable detailed logging for NPC spawning, loading, and state changes")]
         private bool verboseLogging = false;
+
+        [Header("Player-NPC Separation (Vampire Survivors style)")]
+        [SerializeField]
+        [Tooltip("Logical radius of the player used for player-NPC overlap tests (world units). " +
+                 "Should match the KCC capsule radius on the PlayerCharacter prefab.")]
+        private float _playerSeparationRadius = 0.35f;
+
+        [SerializeField]
+        [Tooltip("Logical radius of each NPC used for player-NPC overlap tests (world units).")]
+        private float _npcSeparationRadius = 0.4f;
+
+        [SerializeField]
+        [Tooltip("Extra gap added on top of the combined radius to prevent tight sliding contact.")]
+        private float _separationSkinWidth = 0.02f;
 
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
@@ -216,6 +231,78 @@ namespace VoidRogues.NonPlayerCharacters
                 {
                     entry.NPC.OnFixedUpdateNetwork(ref data, tick, hasAuthority);
                 }
+            }
+
+            // After all NPC positions are captured for this tick, apply player-NPC
+            // separation on the server so NPCs are pushed away from every player
+            // (Vampire Survivors style: players walk through enemies freely).
+            if (hasAuthority)
+                ApplyPlayerNPCSeparation();
+        }
+
+        /// <summary>
+        /// Iterates every active NPC and pushes it away from any player whose circle
+        /// overlaps the NPC's circle on the XZ plane.  Runs server-side only so the
+        /// authoritative <c>FNonPlayerCharacterData.Position</c> values are updated and
+        /// replicated to all clients.
+        ///
+        /// The player is intentionally never deflected — only NPCs move.
+        /// </summary>
+        private void ApplyPlayerNPCSeparation()
+        {
+            var players = Runner.GetAllBehaviours<PlayerCharacter>();
+            if (players == null || players.Count == 0)
+                return;
+
+            float combined   = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
+            float combinedSq = combined * combined;
+
+            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            {
+                NPCViewEntry entry = pair.Value;
+                if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
+                    continue;
+
+                ref FNonPlayerCharacterData data = ref _npcDatas.GetRef(pair.Key);
+                if (data.DefinitionID == 0)
+                    continue;
+
+                Vector3 npcPos    = data.Position;
+                Vector3 totalPush = Vector3.zero;
+
+                foreach (PlayerCharacter player in players)
+                {
+                    if (player == null)
+                        continue;
+
+                    Vector3 playerPos = player.transform.position;
+
+                    // XZ-only distance (top-down game; ignore height difference).
+                    float dx = npcPos.x - playerPos.x;
+                    float dz = npcPos.z - playerPos.z;
+                    float distSq = dx * dx + dz * dz;
+
+                    if (distSq >= combinedSq)
+                        continue;  // No overlap.
+
+                    float dist    = distSq > 1e-8f ? Mathf.Sqrt(distSq) : 0f;
+                    float overlap = combined - dist;
+
+                    Vector3 pushDir;
+                    if (dist > 1e-4f)
+                        pushDir = new Vector3(dx / dist, 0f, dz / dist);
+                    else
+                        pushDir = Vector3.right;  // Coincident centres — stable fallback.
+
+                    totalPush += pushDir * overlap;
+                }
+
+                if (totalPush.sqrMagnitude < 1e-8f)
+                    continue;
+
+                Vector3 newPos = npcPos + totalPush;
+                data.Position = newPos;
+                entry.NPC.TeleportToPosition(newPos);
             }
         }
 
