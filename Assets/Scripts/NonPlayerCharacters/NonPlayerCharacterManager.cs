@@ -44,6 +44,13 @@ namespace VoidRogues.NonPlayerCharacters
 
         [Header("Client Predictive Separation – Smoothing")]
         [SerializeField]
+        [Tooltip("Maximum time (seconds) an NPC is held in the predictive push-out state before its " +
+                 "display position begins reconciling back to the network position, regardless of whether " +
+                 "the server separation has resolved. Lower values cause earlier reconciliation; higher " +
+                 "values keep the NPC pushed out longer while waiting for the server.")]
+        private float _maxPushOutTime = 0.5f;
+
+        [SerializeField]
         [Tooltip("Speed at which a pushed NPC's visual position decays back to its network position " +
                  "once the server separation has resolved (world units/second).")]
         private float _separationDecaySpeed = 4f;
@@ -67,6 +74,11 @@ namespace VoidRogues.NonPlayerCharacters
         // used in _views.  Entries exist only while an NPC is inside (or recently exited)
         // the exclusion circle.
         private Dictionary<int, Vector3> _npcDisplayPositions = new Dictionary<int, Vector3>(NonPlayerCharacterConstants.MAX_NPC_REPS);
+
+        // Tracks the Time.time at which each NPC first entered the predictive push state.
+        // Used to enforce _maxPushOutTime: once the elapsed time exceeds it, the NPC is
+        // forced into the decay phase even if the server position is still inside the circle.
+        private Dictionary<int, float> _npcPushStartTimes = new Dictionary<int, float>(NonPlayerCharacterConstants.MAX_NPC_REPS);
 
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
@@ -418,6 +430,7 @@ namespace VoidRogues.NonPlayerCharacters
                     if (ex * ex + ez * ez < CONVERGENCE_THRESHOLD_SQUARED)
                     {
                         _npcDisplayPositions.Remove(key);
+                        _npcPushStartTimes.Remove(key);
                         // Let the transform return to its network-interpolated position naturally.
                         continue;
                     }
@@ -455,6 +468,7 @@ namespace VoidRogues.NonPlayerCharacters
                         playerPos.z + pushDirZ * combined);
 
                     _npcDisplayPositions[key] = displayPos;
+                    _npcPushStartTimes[key]   = Time.time;
                     npcTransform.position     = displayPos;
                     continue;
                 }
@@ -497,61 +511,88 @@ namespace VoidRogues.NonPlayerCharacters
                     // ── Flight phase ──────────────────────────────────────────────────
                     // Display position is already outside the circle; network position is
                     // still inside (server hasn't replicated the separation yet).
-                    // Advance the display position outward at _separationFlightSpeed using
-                    // the display→player direction — this direction is stable even when the
-                    // player moves, because displayPos is outside the circle and only
-                    // changes via this smooth integration.
-                    float outMag = Mathf.Sqrt(ddx * ddx + ddz * ddz);
-                    float outDirX, outDirZ;
-                    if (outMag > DISTANCE_EPSILON)
+                    //
+                    // If the NPC has been pushed out for longer than _maxPushOutTime, stop
+                    // advancing and instead decay back toward the network position so the
+                    // client doesn't hold the NPC out indefinitely.
+                    bool pushTimedOut = _npcPushStartTimes.TryGetValue(key, out float pushStart) &&
+                                        (Time.time - pushStart) >= _maxPushOutTime;
+
+                    if (pushTimedOut)
                     {
-                        float inv = 1f / outMag;
-                        outDirX   = ddx * inv;
-                        outDirZ   = ddz * inv;
+                        // ── Forced decay (push duration expired) ─────────────────────
+                        Vector3 decayed = Vector3.MoveTowards(displayPos, networkPos, _separationDecaySpeed * dt);
+
+                        float ex = decayed.x - networkPos.x;
+                        float ez = decayed.z - networkPos.z;
+                        if (ex * ex + ez * ez < CONVERGENCE_THRESHOLD_SQUARED)
+                        {
+                            _npcDisplayPositions.Remove(key);
+                            _npcPushStartTimes.Remove(key);
+                            continue;
+                        }
+
+                        _npcDisplayPositions[key] = decayed;
+                        npcTransform.position     = new Vector3(decayed.x, networkPos.y, decayed.z);
                     }
                     else
                     {
-                        outDirX = 1f;
-                        outDirZ = 0f;
-                    }
-
-                    // RVO-style flocking: accumulate avoidance from other pushed NPCs so
-                    // they spread sideways rather than stacking in a radial column.
-                    float avoidX = 0f, avoidZ = 0f;
-                    foreach (KeyValuePair<int, Vector3> otherPair in _npcDisplayPositions)
-                    {
-                        if (otherPair.Key == key)
-                            continue;
-
-                        float ex     = displayPos.x - otherPair.Value.x;
-                        float ez     = displayPos.z - otherPair.Value.z;
-                        float distSq = ex * ex + ez * ez;
-                        if (distSq < _npcFlockingRadius * _npcFlockingRadius && distSq > EPSILON_SQUARED)
+                        // Advance the display position outward at _separationFlightSpeed using
+                        // the display→player direction — this direction is stable even when the
+                        // player moves, because displayPos is outside the circle and only
+                        // changes via this smooth integration.
+                        float outMag = Mathf.Sqrt(ddx * ddx + ddz * ddz);
+                        float outDirX, outDirZ;
+                        if (outMag > DISTANCE_EPSILON)
                         {
-                            float dist   = Mathf.Sqrt(distSq);
-                            float weight = (_npcFlockingRadius - dist) / _npcFlockingRadius;
-                            avoidX += (ex / dist) * weight;
-                            avoidZ += (ez / dist) * weight;
+                            float inv = 1f / outMag;
+                            outDirX   = ddx * inv;
+                            outDirZ   = ddz * inv;
                         }
+                        else
+                        {
+                            outDirX = 1f;
+                            outDirZ = 0f;
+                        }
+
+                        // RVO-style flocking: accumulate avoidance from other pushed NPCs so
+                        // they spread sideways rather than stacking in a radial column.
+                        float avoidX = 0f, avoidZ = 0f;
+                        foreach (KeyValuePair<int, Vector3> otherPair in _npcDisplayPositions)
+                        {
+                            if (otherPair.Key == key)
+                                continue;
+
+                            float ex     = displayPos.x - otherPair.Value.x;
+                            float ez     = displayPos.z - otherPair.Value.z;
+                            float distSq = ex * ex + ez * ez;
+                            if (distSq < _npcFlockingRadius * _npcFlockingRadius && distSq > EPSILON_SQUARED)
+                            {
+                                float dist   = Mathf.Sqrt(distSq);
+                                float weight = (_npcFlockingRadius - dist) / _npcFlockingRadius;
+                                avoidX += (ex / dist) * weight;
+                                avoidZ += (ez / dist) * weight;
+                            }
+                        }
+
+                        float velX = outDirX * _separationFlightSpeed + avoidX * _separationFlightSpeed;
+                        float velZ = outDirZ * _separationFlightSpeed + avoidZ * _separationFlightSpeed;
+
+                        // Clamp to flightSpeed so avoidance can only redirect, never accelerate.
+                        float velMag = Mathf.Sqrt(velX * velX + velZ * velZ);
+                        if (velMag > _separationFlightSpeed && velMag > DISTANCE_EPSILON)
+                        {
+                            float clamp = _separationFlightSpeed / velMag;
+                            velX *= clamp;
+                            velZ *= clamp;
+                        }
+
+                        displayPos.x += velX * dt;
+                        displayPos.z += velZ * dt;
+
+                        _npcDisplayPositions[key] = displayPos;
+                        npcTransform.position     = new Vector3(displayPos.x, networkPos.y, displayPos.z);
                     }
-
-                    float velX = outDirX * _separationFlightSpeed + avoidX * _separationFlightSpeed;
-                    float velZ = outDirZ * _separationFlightSpeed + avoidZ * _separationFlightSpeed;
-
-                    // Clamp to flightSpeed so avoidance can only redirect, never accelerate.
-                    float velMag = Mathf.Sqrt(velX * velX + velZ * velZ);
-                    if (velMag > _separationFlightSpeed && velMag > DISTANCE_EPSILON)
-                    {
-                        float clamp = _separationFlightSpeed / velMag;
-                        velX *= clamp;
-                        velZ *= clamp;
-                    }
-
-                    displayPos.x += velX * dt;
-                    displayPos.z += velZ * dt;
-
-                    _npcDisplayPositions[key] = displayPos;
-                    npcTransform.position     = new Vector3(displayPos.x, networkPos.y, displayPos.z);
                 }
             }
         }
@@ -678,6 +719,7 @@ namespace VoidRogues.NonPlayerCharacters
 
             // Clear any client-side predictive display position so recycled indices start fresh.
             _npcDisplayPositions.Remove(index);
+            _npcPushStartTimes.Remove(index);
         }
 
         private class NPCViewEntry
