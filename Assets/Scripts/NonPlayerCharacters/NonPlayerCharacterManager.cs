@@ -43,6 +43,15 @@ namespace VoidRogues.NonPlayerCharacters
                  "softer, more gradual blend-out.")]
         private float _separationDecaySpeed = 10f;
 
+        [SerializeField]
+        [Range(0.1f, 5f)]
+        [Tooltip("Per-NPC XZ radius used for NPC-NPC avoidance steering during the predictive " +
+                 "flight phase. NPCs within this distance of each other will steer sideways, " +
+                 "producing RVO-style flocking as they disperse from the player. " +
+                 "Default (1.2) is 3× _npcSeparationRadius (0.4); larger values give more " +
+                 "personal space and a more spread-out flock.")]
+        private float _npcFlockingRadius = 1.2f;
+
         // Minimum squared magnitude used when checking whether a computed push vector is
         // effectively zero (avoids normalising near-zero vectors).
         private const float EPSILON_SQUARED = 1e-8f;
@@ -55,6 +64,10 @@ namespace VoidRogues.NonPlayerCharacters
         // converged closely enough to the network position that tracking can stop.
         // (0.01 units ² ≈ 1 cm round-trip, imperceptible at game scale.)
         private const float CONVERGENCE_THRESHOLD_SQUARED = 1e-4f;
+
+        // Fallback flight speed (units/sec) used when an NPC's AIFollower is unavailable.
+        // Should match the default _followerMaxSpeed in NonPlayerCharacterMovementComponent.
+        private const float DEFAULT_FLIGHT_SPEED = 5f;
 
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
@@ -354,17 +367,21 @@ namespace VoidRogues.NonPlayerCharacters
         /// </para>
         ///
         /// <para>
-        /// Two phases — chosen based on whether the <em>server</em> has already pushed the NPC
-        /// outside the exclusion circle:
+        /// Three sub-phases — chosen based on the relationship between <c>networkPos</c>,
+        /// <c>displayPos</c>, and the exclusion circle:
         /// <list type="bullet">
-        ///   <item><b>Push phase</b> (<c>networkPos</c> inside circle) — applies the identical
-        ///   <c>pushDir * overlap * _pushStrength</c> formula the server uses, operating on
-        ///   <c>displayPos</c> so the visual result is immediate but independent of the
-        ///   unreceived server tick.</item>
+        ///   <item><b>Push sub-phase</b> (<c>networkPos</c> inside circle, <c>displayPos</c>
+        ///   inside circle) — applies <c>pushDir * overlap * _pushStrength</c> to snap
+        ///   <c>displayPos</c> to the boundary immediately.</item>
+        ///   <item><b>Flight sub-phase</b> (<c>networkPos</c> inside circle, <c>displayPos</c>
+        ///   at/past boundary) — advances <c>displayPos</c> using a steering velocity composed
+        ///   of a primary outward component (away from the player, at the NPC's natural speed)
+        ///   and an NPC-NPC avoidance component sampled from all other tracked display positions.
+        ///   This produces RVO-style flocking: NPCs spread sideways as they disperse rather
+        ///   than piling up in a radial column.</item>
         ///   <item><b>Decay phase</b> (<c>networkPos</c> outside circle) — <c>MoveTowards</c>
         ///   smoothly returns <c>displayPos</c> to the server-authoritative position at
-        ///   <see cref="_separationDecaySpeed"/> units/sec.  The phases never run simultaneously
-        ///   so they cannot fight each other.</item>
+        ///   <see cref="_separationDecaySpeed"/> units/sec.</item>
         /// </list>
         /// </para>
         ///
@@ -417,39 +434,95 @@ namespace VoidRogues.NonPlayerCharacters
 
                 if (networkInsideCircle)
                 {
-                    // ── Push phase ────────────────────────────────────────────────────
-                    // Mirror ApplyPlayerNPCSeparation exactly: compute the overlap between
-                    // displayPos and the player, then apply pushDir * overlap * _pushStrength.
+                    // ── Push / flight phase ───────────────────────────────────────────
+                    // Compute the push direction from the player to displayPos (outward).
                     float ddx         = displayPos.x - playerPos.x;
                     float ddz         = displayPos.z - playerPos.z;
                     float displayDist = Mathf.Sqrt(ddx * ddx + ddz * ddz);
                     float overlap     = combined - displayDist;
 
+                    float pushDirX, pushDirZ;
+                    if (displayDist > DISTANCE_EPSILON)
+                    {
+                        float inv = 1f / displayDist;
+                        pushDirX = ddx * inv;
+                        pushDirZ = ddz * inv;
+                    }
+                    else if (netDistSq > EPSILON_SQUARED)
+                    {
+                        float inv = 1f / Mathf.Sqrt(netDistSq);
+                        pushDirX = ndx * inv;
+                        pushDirZ = ndz * inv;
+                    }
+                    else
+                    {
+                        pushDirX = 1f;
+                        pushDirZ = 0f;
+                    }
+
                     if (overlap > 0f)
                     {
-                        float pushDirX, pushDirZ;
-                        if (displayDist > DISTANCE_EPSILON)
-                        {
-                            float inv = 1f / displayDist;
-                            pushDirX = ddx * inv;
-                            pushDirZ = ddz * inv;
-                        }
-                        else if (netDistSq > EPSILON_SQUARED)
-                        {
-                            float inv = 1f / Mathf.Sqrt(netDistSq);
-                            pushDirX = ndx * inv;
-                            pushDirZ = ndz * inv;
-                        }
-                        else
-                        {
-                            pushDirX = 1f;
-                            pushDirZ = 0f;
-                        }
-
+                        // Snap to boundary (mirrors ApplyPlayerNPCSeparation).
                         displayPos = new Vector3(
                             displayPos.x + pushDirX * overlap * _pushStrength,
                             networkPos.y,
                             displayPos.z + pushDirZ * overlap * _pushStrength);
+                    }
+                    else
+                    {
+                        // ── Flight phase ──────────────────────────────────────────────
+                        // NPC is at/past the boundary but the server position is still
+                        // inside the circle (server push hasn't been received yet).
+                        // Build a steering velocity that combines:
+                        //   1. Primary: outward from player (mirrors post-push pathfinding)
+                        //   2. NPC-NPC avoidance: steer around other tracked display
+                        //      positions so the group flocks like RVO rather than piling up.
+                        float flightSpeed = entry.NPC.Movement.AIFollower?.maxSpeed ?? DEFAULT_FLIGHT_SPEED;
+
+                        // 1. Primary velocity component: outward from player.
+                        float velX = pushDirX * flightSpeed;
+                        float velZ = pushDirZ * flightSpeed;
+
+                        // 2. NPC-NPC avoidance: iterate all currently-tracked display
+                        //    positions (previous-frame values) and accumulate repulsion.
+                        //    Linear falloff: full weight at centre → zero at _npcFlockingRadius.
+                        //    _npcDisplayPositions contains only NPCs currently inside the
+                        //    exclusion circle, so N is small in practice (typically <30).
+                        float flock   = _npcFlockingRadius;
+                        float flockSq = flock * flock;
+
+                        foreach (KeyValuePair<int, Vector3> other in _npcDisplayPositions)
+                        {
+                            if (other.Key == key)
+                                continue;
+
+                            float ox     = displayPos.x - other.Value.x;
+                            float oz     = displayPos.z - other.Value.z;
+                            float odistSq = ox * ox + oz * oz;
+
+                            if (odistSq >= flockSq || odistSq < EPSILON_SQUARED)
+                                continue;
+
+                            float odist  = Mathf.Sqrt(odistSq);
+                            float weight = (flock - odist) / flock;   // 1 at centre, 0 at edge
+                            velX += (ox / odist) * flightSpeed * weight;
+                            velZ += (oz / odist) * flightSpeed * weight;
+                        }
+
+                        // Clamp resultant velocity to flight speed so avoidance forces
+                        // can redirect but never accelerate the NPC beyond its natural pace.
+                        float velSq = velX * velX + velZ * velZ;
+                        if (velSq > flightSpeed * flightSpeed)
+                        {
+                            float inv = flightSpeed / Mathf.Sqrt(velSq);
+                            velX *= inv;
+                            velZ *= inv;
+                        }
+
+                        displayPos = new Vector3(
+                            displayPos.x + velX * Time.deltaTime,
+                            networkPos.y,
+                            displayPos.z + velZ * Time.deltaTime);
                     }
                 }
                 else

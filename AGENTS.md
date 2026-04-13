@@ -107,48 +107,51 @@ Two complementary passes keep NPCs visually separated from players:
 - Only the *local* player is used; remote player positions carry the same network delay
   and would not improve perceived latency.
 
-#### Known Bug: Stationary-Player NPC Convergence Failure (fix planned for PR #50)
+#### Three-Phase Algorithm (current implementation — PRs #50 + #51)
 
-**Root cause (offset-based tracking):**
-`_npcSeparationOffsets` stores `offset = displayPos − networkPos` per NPC.
-When `networkPos` sits *inside* the exclusion circle (server hasn't yet pushed the NPC
-out), the constraint clamp fires every frame and resets `offset` to
-`boundary − networkPos`, preventing it from ever decaying.  When the server finally
-pushes `networkPos` to the boundary the stale outward offset is *added on top*
-(`displayPos = newNetworkPos + oldOffset`), so the NPC visually overshoots further out
-than the server position; it then slowly decays back — during which it overlaps
-neighbouring NPCs that have already converged.  Net result: a stationary player keeps
-NPCs "glued" at (or past) the boundary, visually overlapping each other, instead of
-snapping back to their authoritative positions.
+`ApplyPredictiveClientSeparation` uses `_npcDisplayPositions: Dictionary<int, Vector3>`
+to track the full visual XZ position per NPC (not an offset).  Three sub-phases per NPC
+per render frame:
 
-**Fix — store display position, not offset:**
-Replace `Dictionary<int, Vector2> _npcSeparationOffsets` with
-`Dictionary<int, Vector3> _npcDisplayPositions` that tracks the full visual XZ position
-per NPC.  The new per-frame algorithm:
+| Phase | Condition | Action |
+|-------|-----------|--------|
+| **Push** | `networkPos` inside circle AND `displayPos` inside circle | Snap `displayPos` to boundary: `pushDir * overlap * _pushStrength` |
+| **Flight** | `networkPos` inside circle AND `displayPos` at/past boundary | Advance `displayPos` with a steering velocity (see below) |
+| **Decay** | `networkPos` outside circle | `MoveTowards(displayPos, networkPos, _separationDecaySpeed * dt)` + convergence removal |
 
-1. Fetch `displayPos` from storage; if no entry exists, seed it to `networkPos`.
-2. `displayPos = Vector3.MoveTowards(displayPos, networkPos, _separationDecaySpeed * dt)`
-   — moves the visual position toward the server position at a fixed world-units/sec rate.
-3. Clamp: if `displayPos` is inside the exclusion circle, push it to the nearest point on
-   the circle boundary (same push-direction priority as before: stored direction first,
-   then `networkPos`-relative direction, then stable fallback).
-4. Convergence: if `|displayPos − networkPos|² < CONVERGENCE_THRESHOLD_SQUARED` and
-   `displayPos` is outside the circle, remove the entry and place the NPC exactly at
-   `networkPos`.
-5. Otherwise store `displayPos` and write it to `npcTransform.position`.
+**Flight-phase steering velocity (RVO-style flocking):**
 
-**Why this fixes the bug:**
-- When `networkPos` is inside the circle, `displayPos` is clamped to the boundary and
-  stays there — it neither overshoots nor oscillates.
-- When the server pushes `networkPos` to the boundary, `displayPos` (already at the
-  boundary) is *immediately* within convergence threshold — the entry is removed and the
-  NPC snaps cleanly to its server position with zero visual correction remaining.
-- When the player is stationary and the server stabilises NPC positions, each NPC's
-  `displayPos` independently lerps to its own `networkPos`.  NPCs spread out naturally
-  following server authoritative data rather than all being pinned to the same circle
-  boundary point.
-- No timers, no state-machine transitions, no discrete jumps — purely continuous
-  `MoveTowards` + boundary clamp, so no popping.
+```
+primary = outwardDir * flightSpeed                     // away from player
+for each other NPC in _npcDisplayPositions:            // previous-frame positions
+    weight = max(0, (_npcFlockingRadius - dist) / _npcFlockingRadius)
+    avoidance += (displayPos - otherPos).normalized * flightSpeed * weight
+velocity = clamp(primary + avoidance, flightSpeed)     // redirect, never accelerate
+```
+
+This makes NPCs spread **sideways** as they flock away rather than piling up radially.
+`_npcFlockingRadius` (default 1.2 units, serialized) controls the personal-space bubble;
+larger values give looser, more spread-out flocks.
+
+**Key properties:**
+- Entries seeded only when `networkPos` enters the circle; removed when `displayPos`
+  converges to `networkPos` (outside circle, distance² < `CONVERGENCE_THRESHOLD_SQUARED`).
+- No `FNonPlayerCharacterData` fields mutated — purely cosmetic.
+- On `ReturnView`, the entry is cleared so recycled NPC indices start fresh.
+
+#### Previous Bug (fixed in PR #50): Stationary-Player NPC Boundary Lock
+
+**Symptom:** After a push, NPCs froze at the exclusion-circle boundary and never moved
+away; they piled up on top of each other while the player was stationary.
+
+**Root cause:** The old push-phase code only fired when `overlap > 0`.  Once `displayPos`
+reached the boundary (`overlap ≤ 0`) and `networkPos` was still inside the circle, the
+code did nothing — no outward movement, no convergence.  NPCs were permanently locked at
+the boundary radius until the server's push finally arrived.
+
+**Fix:** Added the **flight sub-phase** (`overlap ≤ 0` while `networkInsideCircle`):
+advance `displayPos` outward at the NPC's natural speed instead of leaving it static.
+Subsequent PR added NPC-NPC avoidance steering to the flight phase for RVO-like flocking.
 
 ### NPC prefab components (`NonPlayerCharacter : DWDObjectPoolObject`)
 
@@ -235,7 +238,8 @@ Unity Input System GUIDs:
 | #47 | `copilot/improve-latency-for-npcs` | NPC latency improvements |
 | #48 | `copilot/fix-npc-flickering-issue` | Removed client-side NPC prediction offset that caused flip/flicker |
 | #49 | `copilot/add-predictive-pushing` | Client-side predictive NPC separation (`ApplyPredictiveClientSeparation`) to eliminate ~150 ms push latency |
-| #50 (planned) | `copilot/fix-npc-separation-convergence` | Fix stationary-player NPC convergence: replace offset dict with display-position dict so `displayPos` MoveTowards `networkPos` + boundary clamp; NPCs return to server position smoothly instead of sticking at the exclusion boundary |
+| #50 | `copilot/fix-npc-separation-convergence` | Fix stationary-player NPC convergence: replaced offset dict with display-position dict; added flight sub-phase so NPCs advance outward instead of freezing at push boundary |
+| #51 | `copilot/fix-npcs-push-position-lock` | RVO-style NPC-NPC avoidance steering in flight phase: NPCs spread sideways as they disperse (via `_npcFlockingRadius` + linear-falloff repulsion), no longer pile up in radial column |
 
 ---
 
