@@ -42,6 +42,32 @@ namespace VoidRogues.NonPlayerCharacters
         // derive a reliable push direction from their delta.
         private const float DISTANCE_EPSILON = 1e-4f;
 
+        [Header("Client Predictive Separation – Smoothing")]
+        [SerializeField]
+        [Tooltip("Speed at which a pushed NPC's visual position decays back to its network position " +
+                 "once the server separation has resolved (world units/second).")]
+        private float _separationDecaySpeed = 4f;
+
+        [SerializeField]
+        [Tooltip("Speed at which a pushed NPC advances outward while the server position is still " +
+                 "inside the exclusion circle (world units/second). Should approximate NPC movement speed.")]
+        private float _separationFlightSpeed = 4f;
+
+        [SerializeField]
+        [Tooltip("Radius within which two pushed NPCs repel each other during the flight phase, " +
+                 "causing them to spread sideways instead of piling up (world units).")]
+        private float _npcFlockingRadius = 1.2f;
+
+        // Squared convergence threshold: when a decaying display position is within this
+        // distance² of the network position it is considered converged and removed.
+        private const float CONVERGENCE_THRESHOLD_SQUARED = 0.01f;
+
+        // Tracks the visual (display) XZ position of each NPC that is currently being
+        // pushed by the client predictive separation pass.  Keyed by the same view index
+        // used in _views.  Entries exist only while an NPC is inside (or recently exited)
+        // the exclusion circle.
+        private Dictionary<int, Vector3> _npcDisplayPositions = new Dictionary<int, Vector3>(NonPlayerCharacterConstants.MAX_NPC_REPS);
+
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
 
@@ -325,12 +351,22 @@ namespace VoidRogues.NonPlayerCharacters
         /// Visual-only separation pass run on clients each render frame.
         ///
         /// <para>
-        /// Mirrors the server-side <see cref="ApplyPlayerNPCSeparation"/> formula against the
-        /// client's locally-predicted player position.  For any NPC whose interpolated network
-        /// position is inside the exclusion circle the transform is overridden to the circle
-        /// boundary, giving an instant Vampire-Survivors-style push with zero latency.
-        /// NPCs outside the circle are left at their interpolated positions.
+        /// Uses a three-phase stateful algorithm to produce smooth, jitter-free NPC motion
+        /// around the locally-predicted player without re-clamping every frame (which caused
+        /// rapid snapping as the player moved).
         /// </para>
+        ///
+        /// <list type="bullet">
+        /// <item><b>Push phase</b> — NPC network position enters the exclusion circle.
+        ///   The display position is seeded at the circle boundary in the outward direction.</item>
+        /// <item><b>Flight phase</b> — network position is still inside the circle but the
+        ///   display position is already at or past the boundary.  The display position is
+        ///   advanced outward at <c>_separationFlightSpeed</c> with RVO-style flocking so NPCs
+        ///   spread sideways instead of piling up radially.</item>
+        /// <item><b>Decay phase</b> — network position has left the circle (server separation
+        ///   resolved).  The display position is moved back toward the network position at
+        ///   <c>_separationDecaySpeed</c> and the entry is removed once converged.</item>
+        /// </list>
         ///
         /// <para>
         /// No <see cref="FNonPlayerCharacterData"/> fields are mutated; all adjustments are
@@ -345,6 +381,7 @@ namespace VoidRogues.NonPlayerCharacters
 
             float combined   = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
             float combinedSq = combined * combined;
+            float dt         = Time.deltaTime;
 
             Vector3 playerPos = localPlayer.transform.position;
 
@@ -354,36 +391,168 @@ namespace VoidRogues.NonPlayerCharacters
                 if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
                     continue;
 
+                int       key          = pair.Key;
                 Transform npcTransform = entry.NPC.CachedTransform;
-                Vector3   networkPos   = npcTransform.position;
+                Vector3   networkPos   = npcTransform.position;   // interpolated from server snapshots
 
                 float ndx       = networkPos.x - playerPos.x;
                 float ndz       = networkPos.z - playerPos.z;
                 float netDistSq = ndx * ndx + ndz * ndz;
 
-                // Already outside the exclusion circle — leave the interpolated position alone.
-                if (netDistSq >= combinedSq)
-                    continue;
+                bool networkInsideCircle = netDistSq < combinedSq;
+                bool hasDisplayPos       = _npcDisplayPositions.TryGetValue(key, out Vector3 displayPos);
 
-                // Inside the circle: push display position to the boundary.
-                float netDist = Mathf.Sqrt(netDistSq);
-                float pushDirX, pushDirZ;
-                if (netDist > DISTANCE_EPSILON)
+                if (!networkInsideCircle)
                 {
-                    float inv = 1f / netDist;
-                    pushDirX  = ndx * inv;
-                    pushDirZ  = ndz * inv;
+                    if (!hasDisplayPos)
+                        continue;   // NPC is clear of the circle and has no pushed display offset.
+
+                    // ── Decay phase ──────────────────────────────────────────────────────
+                    // Network position has left the circle (server separation resolved).
+                    // Smoothly move the display position back to the network position so
+                    // the NPC settles without a visible teleport.
+                    Vector3 decayed = Vector3.MoveTowards(displayPos, networkPos, _separationDecaySpeed * dt);
+
+                    float ex = decayed.x - networkPos.x;
+                    float ez = decayed.z - networkPos.z;
+                    if (ex * ex + ez * ez < CONVERGENCE_THRESHOLD_SQUARED)
+                    {
+                        _npcDisplayPositions.Remove(key);
+                        // Let the transform return to its network-interpolated position naturally.
+                        continue;
+                    }
+
+                    _npcDisplayPositions[key] = decayed;
+                    npcTransform.position     = new Vector3(decayed.x, networkPos.y, decayed.z);
+                    continue;
+                }
+
+                // ── Network position is inside the circle ─────────────────────────────
+
+                if (!hasDisplayPos)
+                {
+                    // ── Push phase (first contact) ────────────────────────────────────
+                    // Seed the display position at the circle boundary in the direction
+                    // from the player to the NPC.  Using the network→player direction here
+                    // is fine because we only do this once (on entry), so no per-frame jitter.
+                    float netDist = Mathf.Sqrt(netDistSq);
+                    float pushDirX, pushDirZ;
+                    if (netDist > DISTANCE_EPSILON)
+                    {
+                        float inv = 1f / netDist;
+                        pushDirX  = ndx * inv;
+                        pushDirZ  = ndz * inv;
+                    }
+                    else
+                    {
+                        pushDirX = 1f;
+                        pushDirZ = 0f;
+                    }
+
+                    displayPos = new Vector3(
+                        playerPos.x + pushDirX * combined,
+                        networkPos.y,
+                        playerPos.z + pushDirZ * combined);
+
+                    _npcDisplayPositions[key] = displayPos;
+                    npcTransform.position     = displayPos;
+                    continue;
+                }
+
+                // Display position exists.  Determine which sub-phase applies.
+                float ddx        = displayPos.x - playerPos.x;
+                float ddz        = displayPos.z - playerPos.z;
+                float dispDistSq = ddx * ddx + ddz * ddz;
+
+                if (dispDistSq < combinedSq)
+                {
+                    // ── Push phase (display is still inside circle) ───────────────────
+                    // The display position drifted back inside (e.g. player moved toward
+                    // it).  Re-snap it to the boundary using the display→player direction
+                    // (not network→player) so the direction is stable.
+                    float dispDist = Mathf.Sqrt(dispDistSq);
+                    float pushDirX, pushDirZ;
+                    if (dispDist > DISTANCE_EPSILON)
+                    {
+                        float inv = 1f / dispDist;
+                        pushDirX  = ddx * inv;
+                        pushDirZ  = ddz * inv;
+                    }
+                    else
+                    {
+                        pushDirX = 1f;
+                        pushDirZ = 0f;
+                    }
+
+                    displayPos = new Vector3(
+                        playerPos.x + pushDirX * combined,
+                        networkPos.y,
+                        playerPos.z + pushDirZ * combined);
+
+                    _npcDisplayPositions[key] = displayPos;
+                    npcTransform.position     = displayPos;
                 }
                 else
                 {
-                    pushDirX = 1f;
-                    pushDirZ = 0f;
-                }
+                    // ── Flight phase ──────────────────────────────────────────────────
+                    // Display position is already outside the circle; network position is
+                    // still inside (server hasn't replicated the separation yet).
+                    // Advance the display position outward at _separationFlightSpeed using
+                    // the display→player direction — this direction is stable even when the
+                    // player moves, because displayPos is outside the circle and only
+                    // changes via this smooth integration.
+                    float outMag = Mathf.Sqrt(ddx * ddx + ddz * ddz);
+                    float outDirX, outDirZ;
+                    if (outMag > DISTANCE_EPSILON)
+                    {
+                        float inv = 1f / outMag;
+                        outDirX   = ddx * inv;
+                        outDirZ   = ddz * inv;
+                    }
+                    else
+                    {
+                        outDirX = 1f;
+                        outDirZ = 0f;
+                    }
 
-                npcTransform.position = new Vector3(
-                    playerPos.x + pushDirX * combined,
-                    networkPos.y,
-                    playerPos.z + pushDirZ * combined);
+                    // RVO-style flocking: accumulate avoidance from other pushed NPCs so
+                    // they spread sideways rather than stacking in a radial column.
+                    float avoidX = 0f, avoidZ = 0f;
+                    foreach (KeyValuePair<int, Vector3> otherPair in _npcDisplayPositions)
+                    {
+                        if (otherPair.Key == key)
+                            continue;
+
+                        float ex     = displayPos.x - otherPair.Value.x;
+                        float ez     = displayPos.z - otherPair.Value.z;
+                        float distSq = ex * ex + ez * ez;
+                        if (distSq < _npcFlockingRadius * _npcFlockingRadius && distSq > EPSILON_SQUARED)
+                        {
+                            float dist   = Mathf.Sqrt(distSq);
+                            float weight = (_npcFlockingRadius - dist) / _npcFlockingRadius;
+                            avoidX += (ex / dist) * weight;
+                            avoidZ += (ez / dist) * weight;
+                        }
+                    }
+
+                    float velX = outDirX * _separationFlightSpeed + avoidX * _separationFlightSpeed;
+                    float velZ = outDirZ * _separationFlightSpeed + avoidZ * _separationFlightSpeed;
+
+                    // Clamp to flightSpeed so avoidance can only redirect, never accelerate.
+                    float velMag = Mathf.Sqrt(velX * velX + velZ * velZ);
+                    if (velMag > _separationFlightSpeed && velMag > DISTANCE_EPSILON)
+                    {
+                        float clamp = _separationFlightSpeed / velMag;
+                        velX *= clamp;
+                        velZ *= clamp;
+                    }
+
+                    displayPos.x += velX * dt;
+                    displayPos.z += velZ * dt;
+
+                    _npcDisplayPositions[key] = displayPos;
+                    npcTransform.position     = new Vector3(displayPos.x, networkPos.y, displayPos.z);
+                }
             }
         }
 
@@ -506,6 +675,9 @@ namespace VoidRogues.NonPlayerCharacters
                 npc.StartRecycle();
                 OnCharacterDespawned?.Invoke(npc);
             }
+
+            // Clear any client-side predictive display position so recycled indices start fresh.
+            _npcDisplayPositions.Remove(index);
         }
 
         private class NPCViewEntry
