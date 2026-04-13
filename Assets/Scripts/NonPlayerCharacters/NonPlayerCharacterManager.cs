@@ -417,39 +417,51 @@ namespace VoidRogues.NonPlayerCharacters
 
                 if (networkInsideCircle)
                 {
-                    // ── Push phase ────────────────────────────────────────────────────
-                    // Mirror ApplyPlayerNPCSeparation exactly: compute the overlap between
-                    // displayPos and the player, then apply pushDir * overlap * _pushStrength.
+                    // ── Push / flight phase ───────────────────────────────────────────
+                    // Compute the push direction from the player to displayPos (outward).
                     float ddx         = displayPos.x - playerPos.x;
                     float ddz         = displayPos.z - playerPos.z;
                     float displayDist = Mathf.Sqrt(ddx * ddx + ddz * ddz);
                     float overlap     = combined - displayDist;
 
+                    float pushDirX, pushDirZ;
+                    if (displayDist > DISTANCE_EPSILON)
+                    {
+                        float inv = 1f / displayDist;
+                        pushDirX = ddx * inv;
+                        pushDirZ = ddz * inv;
+                    }
+                    else if (netDistSq > EPSILON_SQUARED)
+                    {
+                        float inv = 1f / Mathf.Sqrt(netDistSq);
+                        pushDirX = ndx * inv;
+                        pushDirZ = ndz * inv;
+                    }
+                    else
+                    {
+                        pushDirX = 1f;
+                        pushDirZ = 0f;
+                    }
+
                     if (overlap > 0f)
                     {
-                        float pushDirX, pushDirZ;
-                        if (displayDist > DISTANCE_EPSILON)
-                        {
-                            float inv = 1f / displayDist;
-                            pushDirX = ddx * inv;
-                            pushDirZ = ddz * inv;
-                        }
-                        else if (netDistSq > EPSILON_SQUARED)
-                        {
-                            float inv = 1f / Mathf.Sqrt(netDistSq);
-                            pushDirX = ndx * inv;
-                            pushDirZ = ndz * inv;
-                        }
-                        else
-                        {
-                            pushDirX = 1f;
-                            pushDirZ = 0f;
-                        }
-
+                        // Snap to boundary (mirrors ApplyPlayerNPCSeparation).
                         displayPos = new Vector3(
                             displayPos.x + pushDirX * overlap * _pushStrength,
                             networkPos.y,
                             displayPos.z + pushDirZ * overlap * _pushStrength);
+                    }
+                    else
+                    {
+                        // NPC is already at or past the boundary but the server position
+                        // is still inside the circle (server push hasn't been received yet).
+                        // Advance outward at the NPC's natural speed so it flocks away
+                        // instead of freezing at the push distance.
+                        float flightSpeed = entry.NPC.Movement.AIFollower?.maxSpeed ?? 5f;
+                        displayPos = new Vector3(
+                            displayPos.x + pushDirX * flightSpeed * Time.deltaTime,
+                            networkPos.y,
+                            displayPos.z + pushDirZ * flightSpeed * Time.deltaTime);
                     }
                 }
                 else
