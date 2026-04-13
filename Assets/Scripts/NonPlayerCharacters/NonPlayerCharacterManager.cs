@@ -71,6 +71,15 @@ namespace VoidRogues.NonPlayerCharacters
                  "For critical damping use damping ≈ 2 * sqrt(strength).")]
         private float _reconcileSpringDamping = 8f;
 
+        [SerializeField]
+        [Tooltip("Outer radius (world units) from the local player beyond which a pushed NPC's " +
+                 "display position begins returning to the reconciled network position, even if the " +
+                 "server has not yet resolved the separation.  Acts as a leash that prevents NPCs " +
+                 "from flying too far from the player during the predictive push.  Should be larger " +
+                 "than the combined separation radius (_playerSeparationRadius + _npcSeparationRadius " +
+                 "+ _separationSkinWidth).")]
+        private float _reconcileOuterRadius = 2.5f;
+
         // Squared convergence threshold: when a decaying display position is within this
         // distance² of the network position and velocity is near zero, the entry is removed.
         private const float CONVERGENCE_THRESHOLD_SQUARED         = 0.01f;
@@ -489,11 +498,13 @@ namespace VoidRogues.NonPlayerCharacters
                 vel.x += avoidX * flockScale * dt;
                 vel.y += avoidZ * flockScale * dt;
 
-                // ── 3. Spring reconciliation (server has resolved the separation) ─────────────
-                // Pull the display position back toward the network position once the server
-                // authoritative push has landed.  Applying the spring only then means it never
-                // fights the outward repulsion while the server correction is still in flight.
-                if (!netInside)
+                // ── 3. Spring reconciliation (server has resolved the separation, or display
+                //        position has travelled beyond the outer return radius) ─────────────────
+                // Pull the display position back toward the network position once:
+                //  (a) the server authoritative push has landed (!netInside), or
+                //  (b) the display position is beyond _reconcileOuterRadius from the player,
+                //      acting as a leash so NPCs never fly too far during the predictive push.
+                if (!netInside || dispDist > _reconcileOuterRadius)
                 {
                     vel.x += (networkPos.x - displayPos.x) * _reconcileSpringStrength * dt;
                     vel.y += (networkPos.z - displayPos.z) * _reconcileSpringStrength * dt;
