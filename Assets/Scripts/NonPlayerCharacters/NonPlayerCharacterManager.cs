@@ -71,6 +71,13 @@ namespace VoidRogues.NonPlayerCharacters
                  "For critical damping use damping ≈ 2 * sqrt(strength).")]
         private float _reconcileSpringDamping = 8f;
 
+        [SerializeField]
+        [Tooltip("If a tracked NPC's display position is already within this radius of its network " +
+                 "position (world units), the predictive offset entry is expired immediately — the " +
+                 "NPC snaps to the server position without any further spring reconciliation. " +
+                 "Increase this to kill lingering offsets sooner; set to 0 to disable the snap.")]
+        private float _reconcileSnapRadius = 0.15f;
+
         // Squared convergence threshold: when a decaying display position is within this
         // distance² of the network position and velocity is near zero, the entry is removed.
         private const float CONVERGENCE_THRESHOLD_SQUARED         = 0.01f;
@@ -449,6 +456,22 @@ namespace VoidRogues.NonPlayerCharacters
                     // pushes it out smoothly — no snap to the boundary.
                     displayPos = networkPos;
                     vel        = Vector2.zero;
+                }
+
+                // ── 0. Snap convergence: expire the entry immediately if the display position
+                //       is already within _reconcileSnapRadius of the network position.
+                //       This prevents offsets from lingering through the spring-reconciliation
+                //       arc when the NPC is already visually close to where it should be.
+                if (_reconcileSnapRadius > 0f)
+                {
+                    float sx = displayPos.x - networkPos.x;
+                    float sz = displayPos.z - networkPos.z;
+                    if (sx * sx + sz * sz < _reconcileSnapRadius * _reconcileSnapRadius)
+                    {
+                        _npcDisplayPositions.Remove(key);
+                        _npcDisplayVelocities.Remove(key);
+                        continue;
+                    }
                 }
 
                 // ── 1. Repulsion force (display position inside exclusion circle) ────────────
