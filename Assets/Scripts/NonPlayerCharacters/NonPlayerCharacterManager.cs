@@ -63,13 +63,13 @@ namespace VoidRogues.NonPlayerCharacters
         [Tooltip("Spring stiffness used when reconciling a pushed NPC's display position back to the " +
                  "network position. Higher values snap the NPC back more quickly. Tuned alongside " +
                  "_reconcileSpringDamping for critical damping (no oscillation).")]
-        private float _reconcileSpringStrength = 12f;
+        private float _reconcileSpringStrength = 25f;
 
         [SerializeField]
         [Tooltip("Velocity damping coefficient applied per second during spring reconciliation. " +
                  "Higher values reduce overshoot; lower values allow a small arc before settling. " +
                  "For critical damping use damping ≈ 2 * sqrt(strength).")]
-        private float _reconcileSpringDamping = 8f;
+        private float _reconcileSpringDamping = 10f;
 
         // Squared convergence threshold: when a decaying display position is within this
         // distance² of the network position and velocity is near zero, the entry is removed.
