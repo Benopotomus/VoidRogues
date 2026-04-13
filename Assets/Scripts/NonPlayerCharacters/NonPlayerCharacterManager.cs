@@ -449,7 +449,7 @@ namespace VoidRogues.NonPlayerCharacters
             // ── RTT-derived effective push-out timeout ────────────────────────────────
             // Hold the NPC pushed out for at least one full round-trip so the server
             // correction has time to arrive before we start pulling back.
-            float playerRtt        = Runner.GetPlayerRtt(Runner.LocalPlayer);
+            float playerRtt        = (float)Runner.GetPlayerRtt(Runner.LocalPlayer);
             float effectiveTimeout = Mathf.Clamp(playerRtt * _rttPushMultiplier, _minPushOutTime, _maxPushOutTime);
 
             foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
