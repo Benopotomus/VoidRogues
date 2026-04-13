@@ -76,6 +76,11 @@ namespace VoidRogues.NonPlayerCharacters
         private const float CONVERGENCE_THRESHOLD_SQUARED         = 0.01f;
         private const float CONVERGENCE_VELOCITY_THRESHOLD_SQUARED = 0.04f;
 
+        // Squared XZ speed below which the local player is considered stationary (units/s)².
+        // At ~0.1 u/s or slower the player is not meaningfully moving, so predictive pushes
+        // are suppressed and any in-flight display offsets reconcile immediately.
+        private const float PLAYER_STATIONARY_SPEED_SQ = 0.01f;
+
         // Tracks the visual (display) XZ position of each NPC that is currently being
         // pushed by the client predictive separation pass.  Keyed by the same view index
         // used in _views.  Entries exist only while an NPC is inside (or recently exited)
@@ -85,6 +90,10 @@ namespace VoidRogues.NonPlayerCharacters
         // XZ display velocity (world units/second) per NPC, maintained across frames so that
         // the spring reconciliation can smoothly blend outward push momentum into the return arc.
         private Dictionary<int, Vector2>  _npcDisplayVelocities = new Dictionary<int, Vector2>(NonPlayerCharacterConstants.MAX_NPC_REPS);
+
+        // Last known XZ player position used to estimate per-frame player velocity.
+        private Vector3 _lastPlayerPos;
+        private bool    _lastPlayerPosValid;
 
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
@@ -386,13 +395,30 @@ namespace VoidRogues.NonPlayerCharacters
         {
             PlayerCharacter localPlayer = Context?.LocalPlayerCharacter;
             if (localPlayer == null)
+            {
+                _lastPlayerPosValid = false;
                 return;
+            }
 
             float combined   = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
             float combinedSq = combined * combined;
             float dt         = Time.deltaTime;
 
             Vector3 playerPos = localPlayer.transform.position;
+
+            // Determine whether the player is stationary this frame.
+            // When stationary we skip outward pushing entirely so that in-flight
+            // display offsets reconcile back to the server positions immediately.
+            bool playerIsStationary = true;
+            if (_lastPlayerPosValid && dt > 0f)
+            {
+                float dvx = playerPos.x - _lastPlayerPos.x;
+                float dvz = playerPos.z - _lastPlayerPos.z;
+                float speedSq = (dvx * dvx + dvz * dvz) / (dt * dt);
+                playerIsStationary = speedSq < PLAYER_STATIONARY_SPEED_SQ;
+            }
+            _lastPlayerPos      = playerPos;
+            _lastPlayerPosValid = true;
 
             float dampFactor = Mathf.Exp(-_reconcileSpringDamping * dt);
             float flockRadSq = _npcFlockingRadius * _npcFlockingRadius;
@@ -416,8 +442,8 @@ namespace VoidRogues.NonPlayerCharacters
 
                 if (!hasDisplay)
                 {
-                    if (!netInside)
-                        continue;   // NPC is clear of the circle and not tracked.
+                    if (!netInside || playerIsStationary)
+                        continue;   // NPC is clear of the circle and not tracked, or player is stationary.
 
                     // Seed the display position at the network position so force integration
                     // pushes it out smoothly — no snap to the boundary.
@@ -428,6 +454,9 @@ namespace VoidRogues.NonPlayerCharacters
                 // ── 1. Repulsion force (display position inside exclusion circle) ────────────
                 // Proportional to penetration depth: the deeper the overlap the harder the
                 // push, producing a smooth acceleration from rest with no abrupt jump.
+                // Skipped when the player is stationary so NPCs reconcile rather than push.
+                if (!playerIsStationary)
+                {
                 float ddx      = displayPos.x - playerPos.x;
                 float ddz      = displayPos.z - playerPos.z;
                 float dispDist = Mathf.Sqrt(ddx * ddx + ddz * ddz);
@@ -488,12 +517,14 @@ namespace VoidRogues.NonPlayerCharacters
                 float flockScale = _separationPushForce * _npcFlockingForceScale;
                 vel.x += avoidX * flockScale * dt;
                 vel.y += avoidZ * flockScale * dt;
+                } // end !playerIsStationary
 
                 // ── 3. Spring reconciliation (server has resolved the separation) ─────────────
                 // Pull the display position back toward the network position once the server
-                // authoritative push has landed.  Applying the spring only then means it never
-                // fights the outward repulsion while the server correction is still in flight.
-                if (!netInside)
+                // authoritative push has landed.  When the player is stationary we apply the
+                // spring unconditionally so that any in-flight offsets collapse immediately
+                // without waiting for the server to confirm the NPC has left the circle.
+                if (!netInside || playerIsStationary)
                 {
                     vel.x += (networkPos.x - displayPos.x) * _reconcileSpringStrength * dt;
                     vel.y += (networkPos.z - displayPos.z) * _reconcileSpringStrength * dt;
@@ -507,8 +538,8 @@ namespace VoidRogues.NonPlayerCharacters
                 displayPos.x += vel.x * dt;
                 displayPos.z += vel.y * dt;
 
-                // ── 6. Convergence check (only meaningful once the server has resolved) ────────
-                if (!netInside)
+                // ── 6. Convergence check (once the server has resolved, or player is stationary) ──
+                if (!netInside || playerIsStationary)
                 {
                     float ex2 = displayPos.x - networkPos.x;
                     float ez2 = displayPos.z - networkPos.z;
