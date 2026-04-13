@@ -1543,7 +1543,13 @@ MonoBehaviour:
   _npcSeparationRadius: 1
   _separationSkinWidth: 0.02
   _pushStrength: 0.446
-  _separationDecaySpeed: 5
+  _rttPushMultiplier: 1
+  _minPushOutTime: 0.05
+  _maxPushOutTime: 0.5
+  _separationFlightSpeed: 4
+  _npcFlockingRadius: 1.2
+  _reconcileSpringStrength: 12
+  _reconcileSpringDamping: 8
 --- !u!4 &3000000000000003
 Transform:
   m_ObjectHideFlags: 0
