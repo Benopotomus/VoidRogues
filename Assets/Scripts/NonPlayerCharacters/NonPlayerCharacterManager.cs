@@ -742,10 +742,15 @@ namespace VoidRogues.NonPlayerCharacters
         {
             if (useLateral)
             {
-                // 2D cross product: positive → NPC is left of player's path.
-                float cross    = pvx * ndz - pvz * ndx;
-                float sideSign = cross >= 0f ? 1f : -1f;
-                // Left perpendicular of (pvx, pvz) is (-pvz, pvx).
+                // 2D cross product: positive → NPC is to the left of the player's path,
+                // negative → NPC is to the right.
+                float cross        = pvx * ndz - pvz * ndx;
+                bool  npcIsOnLeft  = cross >= 0f;
+                float sideSign     = npcIsOnLeft ? 1f : -1f;
+                // A 90° counter-clockwise rotation of (pvx, pvz) gives (-pvz, pvx), which
+                // is the left-hand perpendicular.  Multiplying by sideSign keeps it pointing
+                // toward whichever side the NPC is already on, so it deflects away from the
+                // player's path rather than toward it.
                 return new Vector2(-pvz * sideSign, pvx * sideSign);
             }
 
