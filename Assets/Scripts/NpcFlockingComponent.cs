@@ -11,11 +11,13 @@ namespace VoidRogues
     /// server-authoritative separation arrives.
     ///
     /// <para>
-    /// Uses <see cref="Physics.OverlapSphereNonAlloc"/> each frame to find only the NPCs
-    /// that are physically close to the player, avoiding the cost of iterating every
-    /// active NPC view.  Once an NPC enters the exclusion circle it is tracked until its
-    /// display position converges back to the network position after the server push
-    /// has landed.
+    /// Iterates active NPCs from <see cref="NonPlayerCharacterManager"/> each frame to find
+    /// those close enough to seed, reading visual transform positions directly rather than
+    /// relying on physics queries (which lag behind because NPC transforms are set in Fusion's
+    /// <c>Render()</c> / Unity <c>Update</c> but the physics broadphase only syncs at
+    /// <c>FixedUpdate</c> when <c>Physics.autoSyncTransforms</c> is false).
+    /// Once an NPC enters the exclusion circle it is tracked until its display position
+    /// converges back to the network position after the server push has landed.
     /// </para>
     ///
     /// <para>
@@ -88,9 +90,6 @@ namespace VoidRogues
         private const float CONVERGENCE_THRESHOLD_SQUARED          = 0.01f;
         private const float CONVERGENCE_VELOCITY_THRESHOLD_SQUARED = 0.04f;
 
-        // Pre-allocated buffer for Physics.OverlapSphereNonAlloc to avoid per-frame allocs.
-        private readonly Collider[] _overlapBuffer = new Collider[256];
-
         // Tracks the visual (display) XZ position of each NPC that is currently being
         // pushed. Entries exist while an NPC is inside (or recently exited) the exclusion
         // circle. Keyed by NonPlayerCharacter instance (reference identity).
@@ -142,21 +141,32 @@ namespace VoidRogues
             float dampFactor  = Mathf.Exp(-_reconcileSpringDamping * dt);
             float flockRadSq  = _npcFlockingRadius * _npcFlockingRadius;
 
-            // ── 1. Seed newly-entered NPCs via physics overlap ────────────────────────
-            // Only NPCs whose collider overlaps the exclusion sphere are seeded.
-            // This replaces the former full-dict iteration against every active NPC view.
-            int hitCount = Physics.OverlapSphereNonAlloc(playerPos, combined, _overlapBuffer);
-            for (int i = 0; i < hitCount; i++)
-            {
-                NonPlayerCharacter npc = _overlapBuffer[i].GetComponent<NonPlayerCharacter>();
-                if (npc == null || _displayPositions.ContainsKey(npc))
-                    continue;
+            // ── 1. Seed newly-entered NPCs via the NPC manager ───────────────────────
+            // NPC transforms are updated in Fusion's Render() (Unity Update phase).
+            // Physics.autoSyncTransforms is false by default in Unity 2020+, so a
+            // physics overlap query in LateUpdate would see stale positions from the
+            // previous FixedUpdate.  Querying the NPC manager directly reads the
+            // transform positions that were just placed by NonPlayerCharacterManager.Render().
+            var npcManager = Context?.NonPlayerCharacterManager;
+            if (npcManager == null)
+                return;
 
-                // Seed at the current interpolated (network) position so the force
-                // integration pushes it out smoothly — no snap to the boundary.
-                _displayPositions[npc] = npc.CachedTransform.position;
-                _displayVelocities[npc] = Vector2.zero;
-            }
+            npcManager.ForEachActiveNPC(npc =>
+            {
+                if (_displayPositions.ContainsKey(npc))
+                    return;
+
+                Vector3 npcPos = npc.CachedTransform.position;
+                float dx = npcPos.x - playerPos.x;
+                float dz = npcPos.z - playerPos.z;
+                if (dx * dx + dz * dz < combinedSq)
+                {
+                    // Seed at the current interpolated (network) position so the force
+                    // integration pushes it out smoothly — no snap to the boundary.
+                    _displayPositions[npc] = npcPos;
+                    _displayVelocities[npc] = Vector2.zero;
+                }
+            });
 
             // ── 2. Process all tracked NPCs ───────────────────────────────────────────
             // Includes both NPCs currently inside the circle AND those decaying back to
