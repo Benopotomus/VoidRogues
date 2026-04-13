@@ -464,7 +464,7 @@ namespace VoidRogues.NonPlayerCharacters
             }
 
             // ── RTT-derived effective push-out timeout ────────────────────────────────
-            float playerRtt        = (float)Runner.GetPlayerRtt(Runner.LocalPlayer);
+            float playerRtt        = Runner.GetPlayerRtt(Runner.LocalPlayer);
             float effectiveTimeout = Mathf.Clamp(playerRtt * _rttPushMultiplier, _minPushOutTime, _maxPushOutTime);
 
             // ── Normalised local-player movement direction (used for lateral steering) ─
