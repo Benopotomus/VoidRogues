@@ -44,30 +44,18 @@ namespace VoidRogues.NonPlayerCharacters
 
         [Header("Client Predictive Separation – Smoothing")]
         [SerializeField]
-        [Tooltip("Multiplier applied to the current round-trip time (RTT) to derive how long an NPC " +
-                 "is held in the predictive push-out state. 1.0 = hold for exactly one full RTT — the " +
-                 "theoretical minimum before the server response can arrive. Increase above 1.0 on high- " +
-                 "jitter connections; decrease below 1.0 for snappier reconciliation at the cost of " +
-                 "occasional visual overlap during lag spikes.")]
-        [Range(0.5f, 3f)]
-        private float _rttPushMultiplier = 1.0f;
+        [Tooltip("Repulsion force applied per unit of penetration depth when an NPC's display " +
+                 "position is inside the exclusion circle (units/s² per unit of overlap). " +
+                 "Higher values push NPCs out faster; lower values give a gentler, slower push.")]
+        private float _separationPushForce = 40f;
 
         [SerializeField]
-        [Tooltip("Minimum push-out hold time (seconds), applied even on LAN where RTT rounds to zero.")]
-        private float _minPushOutTime = 0.05f;
+        [Tooltip("Scales the lateral flocking force relative to the main push force. " +
+                 "0.1 = flocking nudge is 10 % of the push; increase for more aggressive sideways spreading.")]
+        private float _npcFlockingForceScale = 0.1f;
 
         [SerializeField]
-        [Tooltip("Maximum push-out hold time (seconds) cap, preventing excessively long pushes on " +
-                 "very high-latency connections.")]
-        private float _maxPushOutTime = 0.5f;
-
-        [SerializeField]
-        [Tooltip("Speed at which a pushed NPC advances outward while the server position is still " +
-                 "inside the exclusion circle (world units/second). Should approximate NPC movement speed.")]
-        private float _separationFlightSpeed = 4f;
-
-        [SerializeField]
-        [Tooltip("Radius within which two pushed NPCs repel each other during the flight phase, " +
+        [Tooltip("Radius within which two pushed NPCs repel each other, " +
                  "causing them to spread sideways instead of piling up (world units).")]
         private float _npcFlockingRadius = 1.2f;
 
@@ -95,18 +83,8 @@ namespace VoidRogues.NonPlayerCharacters
         private Dictionary<int, Vector3>  _npcDisplayPositions  = new Dictionary<int, Vector3>(NonPlayerCharacterConstants.MAX_NPC_REPS);
 
         // XZ display velocity (world units/second) per NPC, maintained across frames so that
-        // spring reconciliation can smoothly blend outward flight momentum into the return arc.
+        // the spring reconciliation can smoothly blend outward push momentum into the return arc.
         private Dictionary<int, Vector2>  _npcDisplayVelocities = new Dictionary<int, Vector2>(NonPlayerCharacterConstants.MAX_NPC_REPS);
-
-        // Tracks the Time.time at which each NPC first entered the predictive push state.
-        // Used to enforce the RTT-derived effective timeout.
-        private Dictionary<int, float>    _npcPushStartTimes    = new Dictionary<int, float>(NonPlayerCharacterConstants.MAX_NPC_REPS);
-
-        // Previous-frame world position of the local player, used to estimate player velocity
-        // for flight-phase compensation so NPCs maintain a stable visual gap as the player moves.
-        private Vector3  _prevPlayerPos;
-        // Smoothed player XZ velocity (EMA, updated once per Render frame).
-        private Vector2  _smoothedPlayerVelocity;
 
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
@@ -388,28 +366,16 @@ namespace VoidRogues.NonPlayerCharacters
         }
 
         /// <summary>
-        /// Visual-only separation pass run on clients each render frame.
+        /// Visual-only separation pass run on non-authority clients each render frame.
         ///
         /// <para>
-        /// Uses a three-phase stateful algorithm to produce smooth, jitter-free NPC motion
-        /// around the locally-predicted player without re-clamping every frame (which caused
-        /// rapid snapping as the player moved).
+        /// Uses continuous physics integration — no discrete phases, no position snapping —
+        /// so NPCs flow smoothly around the player like water.  A proportional repulsion
+        /// force accelerates an NPC's display position out of the exclusion circle while the
+        /// server authoritative separation is still travelling across the network.  Once the
+        /// server position exits the circle a damped spring pulls the display position back.
+        /// RVO-style flocking spreads NPCs sideways so they do not pile up radially.
         /// </para>
-        ///
-        /// <list type="bullet">
-        /// <item><b>Push phase</b> — NPC network position enters the exclusion circle.
-        ///   The display position is seeded at the circle boundary in the outward direction.</item>
-        /// <item><b>Flight phase</b> — network position is still inside the circle but the
-        ///   display position is already at or past the boundary.  The display position is
-        ///   advanced outward at <c>_separationFlightSpeed</c> (boosted by the player's approach
-        ///   speed to maintain a stable visual gap) with RVO-style flocking so NPCs spread
-        ///   sideways instead of piling up radially.  Runs until the RTT-derived timeout.</item>
-        /// <item><b>Spring reconciliation</b> — either the server has resolved the separation
-        ///   (network position left the circle) or the RTT timeout expired.  The display
-        ///   position is pulled back to the network position via a critically-damped spring,
-        ///   blending the outward flight velocity into a smooth arc with no abrupt reversal.
-        ///   Entry removed once converged.</item>
-        /// </list>
         ///
         /// <para>
         /// No <see cref="FNonPlayerCharacterData"/> fields are mutated; all adjustments are
@@ -428,29 +394,8 @@ namespace VoidRogues.NonPlayerCharacters
 
             Vector3 playerPos = localPlayer.transform.position;
 
-            // ── Player velocity (1-frame EMA) ─────────────────────────────────────────
-            // Estimate how fast the player is moving in XZ so the flight phase can
-            // compensate and keep a stable visual gap when the player walks into a crowd.
-            float playerVelX = 0f, playerVelZ = 0f;
-            if (dt > 1e-6f)
-            {
-                float rawVelX = (playerPos.x - _prevPlayerPos.x) / dt;
-                float rawVelZ = (playerPos.z - _prevPlayerPos.z) / dt;
-                // Alpha for the EMA: 0.5 blends 50 % toward the raw value each frame,
-                // filtering single-frame spikes (e.g. from position corrections) without
-                // introducing significant lag on genuine acceleration.
-                const float EMA_ALPHA = 0.5f;
-                _smoothedPlayerVelocity.x += EMA_ALPHA * (rawVelX - _smoothedPlayerVelocity.x);
-                _smoothedPlayerVelocity.y += EMA_ALPHA * (rawVelZ - _smoothedPlayerVelocity.y);
-                playerVelX = _smoothedPlayerVelocity.x;
-                playerVelZ = _smoothedPlayerVelocity.y;
-            }
-
-            // ── RTT-derived effective push-out timeout ────────────────────────────────
-            // Hold the NPC pushed out for at least one full round-trip so the server
-            // correction has time to arrive before we start pulling back.
-            float playerRtt        = (float)Runner.GetPlayerRtt(Runner.LocalPlayer);
-            float effectiveTimeout = Mathf.Clamp(playerRtt * _rttPushMultiplier, _minPushOutTime, _maxPushOutTime);
+            float dampFactor = Mathf.Exp(-_reconcileSpringDamping * dt);
+            float flockRadSq = _npcFlockingRadius * _npcFlockingRadius;
 
             foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
             {
@@ -462,238 +407,124 @@ namespace VoidRogues.NonPlayerCharacters
                 Transform npcTransform = entry.NPC.CachedTransform;
                 Vector3   networkPos   = npcTransform.position;   // interpolated from server snapshots
 
-                float ndx       = networkPos.x - playerPos.x;
-                float ndz       = networkPos.z - playerPos.z;
-                float netDistSq = ndx * ndx + ndz * ndz;
+                float ndx      = networkPos.x - playerPos.x;
+                float ndz      = networkPos.z - playerPos.z;
+                bool  netInside = (ndx * ndx + ndz * ndz) < combinedSq;
 
-                bool networkInsideCircle = netDistSq < combinedSq;
-                bool hasDisplayPos       = _npcDisplayPositions.TryGetValue(key, out Vector3 displayPos);
+                bool hasDisplay = _npcDisplayPositions.TryGetValue(key, out Vector3 displayPos);
+                _npcDisplayVelocities.TryGetValue(key, out Vector2 vel);
 
-                if (!networkInsideCircle)
+                if (!hasDisplay)
                 {
-                    if (!hasDisplayPos)
-                        continue;   // NPC is clear of the circle and has no pushed display.
+                    if (!netInside)
+                        continue;   // NPC is clear of the circle and not tracked.
 
-                    // ── Spring reconciliation (server-resolved) ───────────────────────
-                    // Pull displayPos back to networkPos via a critically-damped spring.
-                    // Any outward velocity from the flight phase bleeds smoothly into the
-                    // arc so there is no abrupt direction reversal.
-                    SpringReconcile(key, ref displayPos, networkPos, dt,
-                                    out bool converged, out Vector2 newVel);
-                    if (converged)
-                    {
-                        _npcDisplayPositions.Remove(key);
-                        _npcDisplayVelocities.Remove(key);
-                        _npcPushStartTimes.Remove(key);
-                        continue;
-                    }
-
-                    _npcDisplayVelocities[key] = newVel;
-                    _npcDisplayPositions[key]  = displayPos;
-                    npcTransform.position      = new Vector3(displayPos.x, networkPos.y, displayPos.z);
-                    continue;
+                    // Seed the display position at the network position so force integration
+                    // pushes it out smoothly — no snap to the boundary.
+                    displayPos = networkPos;
+                    vel        = Vector2.zero;
                 }
 
-                // ── Network position is inside the circle ─────────────────────────────
-
-                if (!hasDisplayPos)
+                // ── 1. Repulsion force (display position inside exclusion circle) ────────────
+                // Proportional to penetration depth: the deeper the overlap the harder the
+                // push, producing a smooth acceleration from rest with no abrupt jump.
+                float ddx      = displayPos.x - playerPos.x;
+                float ddz      = displayPos.z - playerPos.z;
+                float dispDist = Mathf.Sqrt(ddx * ddx + ddz * ddz);
+                float overlap  = combined - dispDist;
+                if (overlap > 0f)
                 {
-                    // ── Push phase (first contact) ────────────────────────────────────
-                    // Seed the display position at the circle boundary.
-                    float netDist = Mathf.Sqrt(netDistSq);
-                    float pushDirX, pushDirZ;
-                    if (netDist > DISTANCE_EPSILON)
-                    {
-                        float inv = 1f / netDist;
-                        pushDirX  = ndx * inv;
-                        pushDirZ  = ndz * inv;
-                    }
-                    else
-                    {
-                        pushDirX = 1f;
-                        pushDirZ = 0f;
-                    }
-
-                    displayPos = new Vector3(
-                        playerPos.x + pushDirX * combined,
-                        networkPos.y,
-                        playerPos.z + pushDirZ * combined);
-
-                    _npcDisplayPositions[key]  = displayPos;
-                    _npcDisplayVelocities[key] = Vector2.zero;
-                    _npcPushStartTimes[key]    = Time.time;
-                    npcTransform.position      = displayPos;
-                    continue;
-                }
-
-                // Display position exists.  Determine which sub-phase applies.
-                float ddx        = displayPos.x - playerPos.x;
-                float ddz        = displayPos.z - playerPos.z;
-                float dispDistSq = ddx * ddx + ddz * ddz;
-
-                if (dispDistSq < combinedSq)
-                {
-                    // ── Push phase (display drifted back inside) ──────────────────────
-                    // Player walked toward the NPC.  Re-snap displayPos to the boundary.
-                    float dispDist = Mathf.Sqrt(dispDistSq);
-                    float pushDirX, pushDirZ;
+                    float outDirX, outDirZ;
                     if (dispDist > DISTANCE_EPSILON)
                     {
                         float inv = 1f / dispDist;
-                        pushDirX  = ddx * inv;
-                        pushDirZ  = ddz * inv;
+                        outDirX   = ddx * inv;
+                        outDirZ   = ddz * inv;
                     }
                     else
                     {
-                        pushDirX = 1f;
-                        pushDirZ = 0f;
-                    }
-
-                    displayPos = new Vector3(
-                        playerPos.x + pushDirX * combined,
-                        networkPos.y,
-                        playerPos.z + pushDirZ * combined);
-
-                    _npcDisplayPositions[key]  = displayPos;
-                    _npcDisplayVelocities[key] = Vector2.zero;
-                    npcTransform.position      = displayPos;
-                }
-                else
-                {
-                    // ── Flight phase ──────────────────────────────────────────────────
-                    // Display position is outside the circle; network position is still
-                    // inside (server hasn't replicated the separation yet).
-
-                    bool pushTimedOut = _npcPushStartTimes.TryGetValue(key, out float pushStart) &&
-                                        (Time.time - pushStart) >= effectiveTimeout;
-
-                    if (pushTimedOut)
-                    {
-                        // ── Spring reconciliation (timeout) ───────────────────────────
-                        // RTT window expired.  Transition into spring decay even though
-                        // the server hasn't resolved yet; the flight velocity blends in
-                        // so the NPC curves back without an abrupt direction flip.
-                        SpringReconcile(key, ref displayPos, networkPos, dt,
-                                        out bool converged, out Vector2 newVel);
-                        if (converged)
+                        // Display position is exactly on the player.  Use the network→away
+                        // direction as the push axis so overlapping NPCs naturally diverge
+                        // rather than all snapping to the same arbitrary axis.
+                        float ndMag = Mathf.Sqrt(ndx * ndx + ndz * ndz);
+                        if (ndMag > DISTANCE_EPSILON)
                         {
-                            _npcDisplayPositions.Remove(key);
-                            _npcDisplayVelocities.Remove(key);
-                            _npcPushStartTimes.Remove(key);
-                            continue;
-                        }
-
-                        _npcDisplayVelocities[key] = newVel;
-                        _npcDisplayPositions[key]  = displayPos;
-                        npcTransform.position      = new Vector3(displayPos.x, networkPos.y, displayPos.z);
-                    }
-                    else
-                    {
-                        // ── Active flight ─────────────────────────────────────────────
-                        // Move displayPos outward, adjusted for player approach speed,
-                        // with RVO flocking to spread NPCs sideways.
-
-                        float outMag = Mathf.Sqrt(ddx * ddx + ddz * ddz);
-                        float outDirX, outDirZ;
-                        if (outMag > DISTANCE_EPSILON)
-                        {
-                            float inv = 1f / outMag;
-                            outDirX   = ddx * inv;
-                            outDirZ   = ddz * inv;
+                            float inv = 1f / ndMag;
+                            outDirX   = ndx * inv;
+                            outDirZ   = ndz * inv;
                         }
                         else
                         {
                             outDirX = 1f;
                             outDirZ = 0f;
                         }
+                    }
 
-                        // Player velocity compensation: if the player is moving toward this
-                        // NPC (approach > 0), boost the outward flight speed by that approach
-                        // component so the visual gap stays constant instead of shrinking.
-                        // When the player moves away (approach ≤ 0) no boost is applied —
-                        // the NPC simply coasts at its base flight speed.
-                        float approach      = -(playerVelX * outDirX + playerVelZ * outDirZ);
-                        float adjustedSpeed = _separationFlightSpeed + Mathf.Max(0f, approach);
+                    float pushMag = overlap * _separationPushForce;
+                    vel.x += outDirX * pushMag * dt;
+                    vel.y += outDirZ * pushMag * dt;
+                }
 
-                        // RVO-style flocking: spread NPCs sideways.
-                        float avoidX = 0f, avoidZ = 0f;
-                        float flockRadSq = _npcFlockingRadius * _npcFlockingRadius;
-                        foreach (KeyValuePair<int, Vector3> otherPair in _npcDisplayPositions)
-                        {
-                            if (otherPair.Key == key)
-                                continue;
+                // ── 2. RVO-style flocking: spread NPCs sideways ───────────────────────────────
+                // Gentle lateral repulsion between NPCs so they fan outward instead of stacking.
+                float avoidX = 0f, avoidZ = 0f;
+                foreach (KeyValuePair<int, Vector3> otherPair in _npcDisplayPositions)
+                {
+                    if (otherPair.Key == key)
+                        continue;
 
-                            float ex     = displayPos.x - otherPair.Value.x;
-                            float ez     = displayPos.z - otherPair.Value.z;
-                            float distSq = ex * ex + ez * ez;
-                            if (distSq < flockRadSq && distSq > EPSILON_SQUARED)
-                            {
-                                float dist   = Mathf.Sqrt(distSq);
-                                float weight = (_npcFlockingRadius - dist) / _npcFlockingRadius;
-                                avoidX += (ex / dist) * weight;
-                                avoidZ += (ez / dist) * weight;
-                            }
-                        }
-
-                        float velX = outDirX * adjustedSpeed + avoidX * _separationFlightSpeed;
-                        float velZ = outDirZ * adjustedSpeed + avoidZ * _separationFlightSpeed;
-
-                        // Clamp so avoidance can only redirect, never accelerate.
-                        float velMag = Mathf.Sqrt(velX * velX + velZ * velZ);
-                        if (velMag > adjustedSpeed && velMag > DISTANCE_EPSILON)
-                        {
-                            float clamp = adjustedSpeed / velMag;
-                            velX *= clamp;
-                            velZ *= clamp;
-                        }
-
-                        displayPos.x += velX * dt;
-                        displayPos.z += velZ * dt;
-
-                        _npcDisplayVelocities[key] = new Vector2(velX, velZ);
-                        _npcDisplayPositions[key]  = displayPos;
-                        npcTransform.position      = new Vector3(displayPos.x, networkPos.y, displayPos.z);
+                    float ex     = displayPos.x - otherPair.Value.x;
+                    float ez     = displayPos.z - otherPair.Value.z;
+                    float distSq = ex * ex + ez * ez;
+                    if (distSq < flockRadSq && distSq > EPSILON_SQUARED)
+                    {
+                        float dist   = Mathf.Sqrt(distSq);
+                        float weight = (_npcFlockingRadius - dist) / _npcFlockingRadius;
+                        avoidX += (ex / dist) * weight;
+                        avoidZ += (ez / dist) * weight;
                     }
                 }
+
+                float flockScale = _separationPushForce * _npcFlockingForceScale;
+                vel.x += avoidX * flockScale * dt;
+                vel.y += avoidZ * flockScale * dt;
+
+                // ── 3. Spring reconciliation (server has resolved the separation) ─────────────
+                // Pull the display position back toward the network position once the server
+                // authoritative push has landed.  Applying the spring only then means it never
+                // fights the outward repulsion while the server correction is still in flight.
+                if (!netInside)
+                {
+                    vel.x += (networkPos.x - displayPos.x) * _reconcileSpringStrength * dt;
+                    vel.y += (networkPos.z - displayPos.z) * _reconcileSpringStrength * dt;
+                }
+
+                // ── 4. Velocity damping ────────────────────────────────────────────────────────
+                vel.x *= dampFactor;
+                vel.y *= dampFactor;
+
+                // ── 5. Integrate position ──────────────────────────────────────────────────────
+                displayPos.x += vel.x * dt;
+                displayPos.z += vel.y * dt;
+
+                // ── 6. Convergence check (only meaningful once the server has resolved) ────────
+                if (!netInside)
+                {
+                    float ex2 = displayPos.x - networkPos.x;
+                    float ez2 = displayPos.z - networkPos.z;
+                    if (ex2 * ex2 + ez2 * ez2 < CONVERGENCE_THRESHOLD_SQUARED &&
+                        vel.x * vel.x + vel.y * vel.y < CONVERGENCE_VELOCITY_THRESHOLD_SQUARED)
+                    {
+                        _npcDisplayPositions.Remove(key);
+                        _npcDisplayVelocities.Remove(key);
+                        continue;
+                    }
+                }
+
+                _npcDisplayPositions[key] = displayPos;
+                _npcDisplayVelocities[key] = vel;
+                npcTransform.position      = new Vector3(displayPos.x, networkPos.y, displayPos.z);
             }
-
-            _prevPlayerPos = playerPos;
-        }
-
-        /// <summary>
-        /// Applies one step of critically-damped spring integration to pull
-        /// <paramref name="displayPos"/> toward <paramref name="networkPos"/>.
-        /// Reads the current display velocity from <see cref="_npcDisplayVelocities"/>
-        /// (zero if not present) so outward flight momentum curves smoothly into the
-        /// return arc without an abrupt direction reversal.
-        /// </summary>
-        private void SpringReconcile(int key,
-                                     ref Vector3 displayPos,
-                                     Vector3     networkPos,
-                                     float       dt,
-                                     out bool    converged,
-                                     out Vector2 newVel)
-        {
-            _npcDisplayVelocities.TryGetValue(key, out Vector2 vel);
-
-            float forceX     = (networkPos.x - displayPos.x) * _reconcileSpringStrength;
-            float forceZ     = (networkPos.z - displayPos.z) * _reconcileSpringStrength;
-            // Exponential velocity decay: more numerically stable than the linear approximation
-            // (1 - damping*dt) and remains well-behaved at any frame rate.
-            float dampFactor = Mathf.Exp(-_reconcileSpringDamping * dt);
-
-            vel.x = (vel.x + forceX * dt) * dampFactor;
-            vel.y = (vel.y + forceZ * dt) * dampFactor;
-
-            displayPos.x += vel.x * dt;
-            displayPos.z += vel.y * dt;
-
-            float ex = displayPos.x - networkPos.x;
-            float ez = displayPos.z - networkPos.z;
-            converged = ex * ex + ez * ez < CONVERGENCE_THRESHOLD_SQUARED &&
-                        vel.x * vel.x + vel.y * vel.y < CONVERGENCE_VELOCITY_THRESHOLD_SQUARED;
-
-            newVel = vel;
         }
 
         // RENDER UPDATE
@@ -819,7 +650,6 @@ namespace VoidRogues.NonPlayerCharacters
             // Clear all client-side predictive state so recycled indices start fresh.
             _npcDisplayPositions.Remove(index);
             _npcDisplayVelocities.Remove(index);
-            _npcPushStartTimes.Remove(index);
         }
 
         private class NPCViewEntry
