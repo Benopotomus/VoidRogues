@@ -37,7 +37,7 @@ namespace VoidRogues
         [Header("Separation Radius")]
         [SerializeField]
         [Tooltip("Logical radius of the player used for NPC overlap tests (world units). " +
-                 "Should match _playerSeparationRadius on NonPlayerCharacterManager.")]
+                 "Should match the KCC capsule radius on the PlayerCharacter prefab.")]
         private float _playerSeparationRadius = 0.35f;
 
         [SerializeField]
@@ -126,8 +126,6 @@ namespace VoidRogues
             ApplyPredictiveClientSeparation();
         }
 
-        // ── Private helpers ───────────────────────────────────────────────────────────
-
         private void ApplyPredictiveClientSeparation()
         {
             float combined   = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
@@ -144,11 +142,7 @@ namespace VoidRogues
             int hitCount = Physics.OverlapSphereNonAlloc(playerPos, combined, _overlapBuffer);
             for (int i = 0; i < hitCount; i++)
             {
-                Collider col = _overlapBuffer[i];
-                if (col == null)
-                    continue;
-
-                NonPlayerCharacter npc = col.GetComponent<NonPlayerCharacter>();
+                NonPlayerCharacter npc = _overlapBuffer[i].GetComponent<NonPlayerCharacter>();
                 if (npc == null || _displayPositions.ContainsKey(npc))
                     continue;
 
