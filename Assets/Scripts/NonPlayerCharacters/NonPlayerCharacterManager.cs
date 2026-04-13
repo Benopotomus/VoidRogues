@@ -72,6 +72,12 @@ namespace VoidRogues.NonPlayerCharacters
         private float _npcFlockingRadius = 1.2f;
 
         [SerializeField]
+        [Tooltip("Minimum smoothed player speed (world units/second) required to use lateral " +
+                 "deflection (shifting NPCs left/right of the player's travel direction). Below " +
+                 "this speed the NPCs fall back to the old radial outward push.")]
+        private float _minPlayerSpeedForLateral = 0.3f;
+
+        [SerializeField]
         [Tooltip("Spring stiffness used when reconciling a pushed NPC's display position back to the " +
                  "network position. Higher values snap the NPC back more quickly. Tuned alongside " +
                  "_reconcileSpringDamping for critical damping (no oscillation).")]
@@ -101,6 +107,12 @@ namespace VoidRogues.NonPlayerCharacters
         // Tracks the Time.time at which each NPC first entered the predictive push state.
         // Used to enforce the RTT-derived effective timeout.
         private Dictionary<int, float>    _npcPushStartTimes    = new Dictionary<int, float>(NonPlayerCharacterConstants.MAX_NPC_REPS);
+
+        // The lateral (or radial fallback) push direction committed when the NPC first entered
+        // the exclusion circle.  Held constant throughout push → flight so the NPC continues
+        // gliding in the same direction it was deflected toward rather than re-computing each
+        // frame (which would cause jitter when the player turns mid-flight).
+        private Dictionary<int, Vector2>  _npcPushDirections    = new Dictionary<int, Vector2>(NonPlayerCharacterConstants.MAX_NPC_REPS);
 
         // Previous-frame world position of the local player, used to estimate player velocity
         // for flight-phase compensation so NPCs maintain a stable visual gap as the player moves.
@@ -398,16 +410,21 @@ namespace VoidRogues.NonPlayerCharacters
         ///
         /// <list type="bullet">
         /// <item><b>Push phase</b> — NPC network position enters the exclusion circle.
-        ///   The display position is seeded at the circle boundary in the outward direction.</item>
+        ///   The display position is seeded at the circle boundary in the <em>lateral</em>
+        ///   direction: perpendicular to the player's current travel direction, biased to the
+        ///   side the NPC is naturally on (left or right of the player's path).  When the
+        ///   player is nearly stationary the algorithm falls back to the old radial outward
+        ///   push.  The chosen direction is stored and held constant for the lifetime of
+        ///   the entry so the NPC commits to one side and glides past cleanly.</item>
         /// <item><b>Flight phase</b> — network position is still inside the circle but the
         ///   display position is already at or past the boundary.  The display position is
-        ///   advanced outward at <c>_separationFlightSpeed</c> (boosted by the player's approach
-        ///   speed to maintain a stable visual gap) with RVO-style flocking so NPCs spread
-        ///   sideways instead of piling up radially.  Runs until the RTT-derived timeout.</item>
+        ///   advanced along the committed lateral direction at <c>_separationFlightSpeed</c>
+        ///   with RVO-style flocking so nearby NPCs spread sideways instead of piling up.
+        ///   Runs until the RTT-derived timeout.</item>
         /// <item><b>Spring reconciliation</b> — either the server has resolved the separation
         ///   (network position left the circle) or the RTT timeout expired.  The display
         ///   position is pulled back to the network position via a critically-damped spring,
-        ///   blending the outward flight velocity into a smooth arc with no abrupt reversal.
+        ///   blending the lateral flight velocity into a smooth arc with no abrupt reversal.
         ///   Entry removed once converged.</item>
         /// </list>
         ///
@@ -444,6 +461,22 @@ namespace VoidRogues.NonPlayerCharacters
                 _smoothedPlayerVelocity.y += EMA_ALPHA * (rawVelZ - _smoothedPlayerVelocity.y);
                 playerVelX = _smoothedPlayerVelocity.x;
                 playerVelZ = _smoothedPlayerVelocity.y;
+            }
+
+            // ── Lateral deflection direction ──────────────────────────────────────────
+            // When the player is moving fast enough we deflect NPCs to the left or right
+            // of the player's travel direction (perpendicular) instead of pushing them
+            // radially outward.  This creates a "parting crowd" effect where NPCs roll
+            // past the player rather than piling up in front.
+            float playerSpeedSq = playerVelX * playerVelX + playerVelZ * playerVelZ;
+            float lateralThresholdSq = _minPlayerSpeedForLateral * _minPlayerSpeedForLateral;
+            bool  useLateral = playerSpeedSq > lateralThresholdSq;
+            float pvx = 0f, pvz = 0f;
+            if (useLateral)
+            {
+                float invSpeed = 1f / Mathf.Sqrt(playerSpeedSq);
+                pvx = playerVelX * invSpeed;
+                pvz = playerVelZ * invSpeed;
             }
 
             // ── RTT-derived effective push-out timeout ────────────────────────────────
@@ -485,6 +518,7 @@ namespace VoidRogues.NonPlayerCharacters
                         _npcDisplayPositions.Remove(key);
                         _npcDisplayVelocities.Remove(key);
                         _npcPushStartTimes.Remove(key);
+                        _npcPushDirections.Remove(key);
                         continue;
                     }
 
@@ -499,29 +533,19 @@ namespace VoidRogues.NonPlayerCharacters
                 if (!hasDisplayPos)
                 {
                     // ── Push phase (first contact) ────────────────────────────────────
-                    // Seed the display position at the circle boundary.
-                    float netDist = Mathf.Sqrt(netDistSq);
-                    float pushDirX, pushDirZ;
-                    if (netDist > DISTANCE_EPSILON)
-                    {
-                        float inv = 1f / netDist;
-                        pushDirX  = ndx * inv;
-                        pushDirZ  = ndz * inv;
-                    }
-                    else
-                    {
-                        pushDirX = 1f;
-                        pushDirZ = 0f;
-                    }
+                    // Seed the display position at the circle boundary in the lateral
+                    // direction (or radially if the player is near-stationary).
+                    Vector2 pushDir = ComputeLateralPushDir(ndx, ndz, pvx, pvz, useLateral);
 
                     displayPos = new Vector3(
-                        playerPos.x + pushDirX * combined,
+                        playerPos.x + pushDir.x * combined,
                         networkPos.y,
-                        playerPos.z + pushDirZ * combined);
+                        playerPos.z + pushDir.y * combined);
 
                     _npcDisplayPositions[key]  = displayPos;
                     _npcDisplayVelocities[key] = Vector2.zero;
                     _npcPushStartTimes[key]    = Time.time;
+                    _npcPushDirections[key]    = pushDir;
                     npcTransform.position      = displayPos;
                     continue;
                 }
@@ -534,28 +558,19 @@ namespace VoidRogues.NonPlayerCharacters
                 if (dispDistSq < combinedSq)
                 {
                     // ── Push phase (display drifted back inside) ──────────────────────
-                    // Player walked toward the NPC.  Re-snap displayPos to the boundary.
-                    float dispDist = Mathf.Sqrt(dispDistSq);
-                    float pushDirX, pushDirZ;
-                    if (dispDist > DISTANCE_EPSILON)
-                    {
-                        float inv = 1f / dispDist;
-                        pushDirX  = ddx * inv;
-                        pushDirZ  = ddz * inv;
-                    }
-                    else
-                    {
-                        pushDirX = 1f;
-                        pushDirZ = 0f;
-                    }
+                    // Player walked toward the NPC.  Re-snap displayPos to the boundary
+                    // using the committed lateral direction (or recompute if unavailable).
+                    if (!_npcPushDirections.TryGetValue(key, out Vector2 pushDir2))
+                        pushDir2 = ComputeLateralPushDir(ndx, ndz, pvx, pvz, useLateral);
 
                     displayPos = new Vector3(
-                        playerPos.x + pushDirX * combined,
+                        playerPos.x + pushDir2.x * combined,
                         networkPos.y,
-                        playerPos.z + pushDirZ * combined);
+                        playerPos.z + pushDir2.y * combined);
 
                     _npcDisplayPositions[key]  = displayPos;
                     _npcDisplayVelocities[key] = Vector2.zero;
+                    _npcPushDirections[key]    = pushDir2;
                     npcTransform.position      = displayPos;
                 }
                 else
@@ -580,6 +595,7 @@ namespace VoidRogues.NonPlayerCharacters
                             _npcDisplayPositions.Remove(key);
                             _npcDisplayVelocities.Remove(key);
                             _npcPushStartTimes.Remove(key);
+                            _npcPushDirections.Remove(key);
                             continue;
                         }
 
@@ -590,32 +606,34 @@ namespace VoidRogues.NonPlayerCharacters
                     else
                     {
                         // ── Active flight ─────────────────────────────────────────────
-                        // Move displayPos outward, adjusted for player approach speed,
-                        // with RVO flocking to spread NPCs sideways.
+                        // Move displayPos along the committed lateral direction so the NPC
+                        // glides past the player rather than stacking up radially outward.
 
-                        float outMag = Mathf.Sqrt(ddx * ddx + ddz * ddz);
-                        float outDirX, outDirZ;
-                        if (outMag > DISTANCE_EPSILON)
+                        // Retrieve the committed direction (fall back to current outward
+                        // direction only if the entry was somehow lost).
+                        float flightDirX, flightDirZ;
+                        if (_npcPushDirections.TryGetValue(key, out Vector2 storedDir))
                         {
-                            float inv = 1f / outMag;
-                            outDirX   = ddx * inv;
-                            outDirZ   = ddz * inv;
+                            flightDirX = storedDir.x;
+                            flightDirZ = storedDir.y;
                         }
                         else
                         {
-                            outDirX = 1f;
-                            outDirZ = 0f;
+                            float outMag = Mathf.Sqrt(ddx * ddx + ddz * ddz);
+                            if (outMag > DISTANCE_EPSILON)
+                            {
+                                float inv  = 1f / outMag;
+                                flightDirX = ddx * inv;
+                                flightDirZ = ddz * inv;
+                            }
+                            else
+                            {
+                                flightDirX = 1f;
+                                flightDirZ = 0f;
+                            }
                         }
 
-                        // Player velocity compensation: if the player is moving toward this
-                        // NPC (approach > 0), boost the outward flight speed by that approach
-                        // component so the visual gap stays constant instead of shrinking.
-                        // When the player moves away (approach ≤ 0) no boost is applied —
-                        // the NPC simply coasts at its base flight speed.
-                        float approach      = -(playerVelX * outDirX + playerVelZ * outDirZ);
-                        float adjustedSpeed = _separationFlightSpeed + Mathf.Max(0f, approach);
-
-                        // RVO-style flocking: spread NPCs sideways.
+                        // RVO-style flocking: spread NPCs that are clustering on the same side.
                         float avoidX = 0f, avoidZ = 0f;
                         float flockRadSq = _npcFlockingRadius * _npcFlockingRadius;
                         foreach (KeyValuePair<int, Vector3> otherPair in _npcDisplayPositions)
@@ -635,14 +653,14 @@ namespace VoidRogues.NonPlayerCharacters
                             }
                         }
 
-                        float velX = outDirX * adjustedSpeed + avoidX * _separationFlightSpeed;
-                        float velZ = outDirZ * adjustedSpeed + avoidZ * _separationFlightSpeed;
+                        float velX = flightDirX * _separationFlightSpeed + avoidX * _separationFlightSpeed;
+                        float velZ = flightDirZ * _separationFlightSpeed + avoidZ * _separationFlightSpeed;
 
                         // Clamp so avoidance can only redirect, never accelerate.
                         float velMag = Mathf.Sqrt(velX * velX + velZ * velZ);
-                        if (velMag > adjustedSpeed && velMag > DISTANCE_EPSILON)
+                        if (velMag > _separationFlightSpeed && velMag > DISTANCE_EPSILON)
                         {
-                            float clamp = adjustedSpeed / velMag;
+                            float clamp = _separationFlightSpeed / velMag;
                             velX *= clamp;
                             velZ *= clamp;
                         }
@@ -694,6 +712,53 @@ namespace VoidRogues.NonPlayerCharacters
                         vel.x * vel.x + vel.y * vel.y < CONVERGENCE_VELOCITY_THRESHOLD_SQUARED;
 
             newVel = vel;
+        }
+
+        /// <summary>
+        /// Computes the XZ direction in which a pushed NPC should be deflected.
+        ///
+        /// <para>
+        /// When <paramref name="useLateral"/> is <c>true</c> (player is moving fast enough),
+        /// returns the direction perpendicular to the player's travel axis that points toward
+        /// the side the NPC is naturally on.  Specifically:
+        /// <list type="bullet">
+        /// <item>The 2D cross product <c>pvx * ndz - pvz * ndx</c> gives the signed area
+        ///   of the parallelogram formed by the player direction and the NPC offset vector.
+        ///   Positive = NPC is to the left of the player's path; negative = to the right.</item>
+        /// <item>The perpendicular of <c>(pvx, pvz)</c> is <c>(-pvz, pvx)</c> (left-hand
+        ///   90° rotation).  Multiplying by <c>sideSign</c> flips it to the correct side.</item>
+        /// </list>
+        /// </para>
+        ///
+        /// <para>
+        /// Falls back to the radial outward direction when the player is nearly stationary
+        /// (<paramref name="useLateral"/> is <c>false</c>) or the NPC is coincident with
+        /// the player (zero distance).
+        /// </para>
+        /// </summary>
+        private Vector2 ComputeLateralPushDir(float ndx, float ndz,
+                                              float pvx, float pvz,
+                                              bool  useLateral)
+        {
+            if (useLateral)
+            {
+                // 2D cross product: positive → NPC is to the left of the player's path,
+                // negative → NPC is to the right.
+                float cross        = pvx * ndz - pvz * ndx;
+                bool  npcIsOnLeft  = cross >= 0f;
+                float sideSign     = npcIsOnLeft ? 1f : -1f;
+                // A 90° counter-clockwise rotation of (pvx, pvz) gives (-pvz, pvx), which
+                // is the left-hand perpendicular.  Multiplying by sideSign keeps it pointing
+                // toward whichever side the NPC is already on, so it deflects away from the
+                // player's path rather than toward it.
+                return new Vector2(-pvz * sideSign, pvx * sideSign);
+            }
+
+            // Radial fallback: push straight away from the player.
+            float dist = Mathf.Sqrt(ndx * ndx + ndz * ndz);
+            if (dist > DISTANCE_EPSILON)
+                return new Vector2(ndx / dist, ndz / dist);
+            return new Vector2(1f, 0f);
         }
 
         // RENDER UPDATE
@@ -820,6 +885,7 @@ namespace VoidRogues.NonPlayerCharacters
             _npcDisplayPositions.Remove(index);
             _npcDisplayVelocities.Remove(index);
             _npcPushStartTimes.Remove(index);
+            _npcPushDirections.Remove(index);
         }
 
         private class NPCViewEntry
