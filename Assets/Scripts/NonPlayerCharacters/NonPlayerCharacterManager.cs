@@ -66,13 +66,14 @@ namespace VoidRogues.NonPlayerCharacters
 
         private Dictionary<int, NPCViewEntry> _views = new Dictionary<int, NPCViewEntry>(NonPlayerCharacterConstants.MAX_NPC_REPS);
 
-        // Per-NPC XZ offsets (display - network position) persisted across render frames for
-        // smooth client-side separation.  An entry exists only while an NPC has a non-trivial
-        // offset; entries are removed once the offset converges to zero.  Cleared in ReturnView
-        // so recycled NPC indices start fresh.
+        // Per-NPC absolute display positions persisted across render frames for smooth
+        // client-side separation.  An entry exists only while an NPC's visual position differs
+        // non-trivially from its server-authoritative network position; entries are removed once
+        // the display position converges to the network position.  Cleared in ReturnView so
+        // recycled NPC indices start fresh.
         // Initial capacity: at ~150 ms RTT only NPCs within ~1 step of the player require
         // tracking — roughly 16 slots covers the common case without over-allocating.
-        private readonly Dictionary<int, Vector2> _npcSeparationOffsets = new Dictionary<int, Vector2>(16);
+        private readonly Dictionary<int, Vector3> _npcDisplayPositions = new Dictionary<int, Vector3>(16);
         private readonly List<int> _separationKeysToRemove = new List<int>(16);
         private List<int> _finishedViews = new List<int>(NonPlayerCharacterConstants.MAX_NPC_REPS); // For cleanup
         private int _viewCount;
@@ -347,25 +348,24 @@ namespace VoidRogues.NonPlayerCharacters
         /// Visual-only separation pass run on clients each render frame.
         ///
         /// <para>
-        /// Tracks a persistent XZ <em>offset</em> (display − network position) per NPC rather
-        /// than an absolute display position.  Each frame the offset magnitude is decayed toward
-        /// zero at <see cref="_separationDecaySpeed"/> units/sec, then a constraint clamps the
-        /// resulting display position to the outside of the player exclusion circle when needed.
+        /// Mirrors the server-side <see cref="ApplyPlayerNPCSeparation"/> formula against the
+        /// client's locally-predicted player position, eliminating the ~RTT visual overlap
+        /// before the server-authoritative push is received.
         /// </para>
         ///
         /// <para>
-        /// This avoids the convergence failure of the previous state-machine approach: the old
-        /// DECAYING path used a straight-line <c>MoveTowards</c> from the last display position
-        /// to the network position, which could pass <em>through</em> the exclusion circle.  The
-        /// clamp then pinned the NPC back to the circle edge every frame and the convergence check
-        /// never fired, leaving NPCs permanently glued to the player boundary.
-        /// </para>
-        ///
-        /// <para>
-        /// Because the offset always decays monotonically toward zero the constraint only ever
-        /// keeps it at the minimum needed and never inflates it, so convergence is guaranteed.
-        /// There are no discrete state transitions (HELD / DECAYING / FREE), eliminating the
-        /// per-state jump artefacts that caused visible popping.
+        /// Two phases — chosen based on whether the <em>server</em> has already pushed the NPC
+        /// outside the exclusion circle:
+        /// <list type="bullet">
+        ///   <item><b>Push phase</b> (<c>networkPos</c> inside circle) — applies the identical
+        ///   <c>pushDir * overlap * _pushStrength</c> formula the server uses, operating on
+        ///   <c>displayPos</c> so the visual result is immediate but independent of the
+        ///   unreceived server tick.</item>
+        ///   <item><b>Decay phase</b> (<c>networkPos</c> outside circle) — <c>MoveTowards</c>
+        ///   smoothly returns <c>displayPos</c> to the server-authoritative position at
+        ///   <see cref="_separationDecaySpeed"/> units/sec.  The phases never run simultaneously
+        ///   so they cannot fight each other.</item>
+        /// </list>
         /// </para>
         ///
         /// <para>
@@ -383,8 +383,7 @@ namespace VoidRogues.NonPlayerCharacters
             float combinedSq = combined * combined;
 
             Vector3 playerPos = localPlayer.transform.position;
-            float   dt        = Time.deltaTime;
-            float   decay     = _separationDecaySpeed * dt;
+            float   step      = _separationDecaySpeed * Time.deltaTime;
 
             _separationKeysToRemove.Clear();
 
@@ -400,85 +399,82 @@ namespace VoidRogues.NonPlayerCharacters
                 // networkPos: where OnRender just placed the NPC via snapshot interpolation.
                 Vector3 networkPos = npcTransform.position;
 
-                // Retrieve the current offset (zero if no entry exists).
-                _npcSeparationOffsets.TryGetValue(key, out Vector2 offset);
-
-                // XZ distance check from the local player to the network position.
+                // XZ distance from player to the server-authoritative NPC position.
                 float ndx       = networkPos.x - playerPos.x;
                 float ndz       = networkPos.z - playerPos.z;
                 float netDistSq = ndx * ndx + ndz * ndz;
 
-                bool needsConstraint = netDistSq < combinedSq;
+                bool networkInsideCircle = netDistSq < combinedSq;
 
-                // If neither the network position overlaps nor we have a live offset, skip.
-                if (!needsConstraint && offset.sqrMagnitude < CONVERGENCE_THRESHOLD_SQUARED)
-                    continue;
-
-                // ── Step 1: decay the offset magnitude toward zero ────────────────────
-                float offsetMag = offset.magnitude;
-                if (offsetMag > decay)
+                // Retrieve or seed the display position.
+                if (!_npcDisplayPositions.TryGetValue(key, out Vector3 displayPos))
                 {
-                    float newMag = offsetMag - decay;
-                    offset = offset * (newMag / offsetMag);
+                    // Only start tracking when the server position is inside the circle.
+                    if (!networkInsideCircle)
+                        continue;
+                    displayPos = networkPos;
+                }
+
+                if (networkInsideCircle)
+                {
+                    // ── Push phase ────────────────────────────────────────────────────
+                    // Mirror ApplyPlayerNPCSeparation exactly: compute the overlap between
+                    // displayPos and the player, then apply pushDir * overlap * _pushStrength.
+                    float ddx         = displayPos.x - playerPos.x;
+                    float ddz         = displayPos.z - playerPos.z;
+                    float displayDist = Mathf.Sqrt(ddx * ddx + ddz * ddz);
+                    float overlap     = combined - displayDist;
+
+                    if (overlap > 0f)
+                    {
+                        float pushDirX, pushDirZ;
+                        if (displayDist > DISTANCE_EPSILON)
+                        {
+                            float inv = 1f / displayDist;
+                            pushDirX = ddx * inv;
+                            pushDirZ = ddz * inv;
+                        }
+                        else if (netDistSq > EPSILON_SQUARED)
+                        {
+                            float inv = 1f / Mathf.Sqrt(netDistSq);
+                            pushDirX = ndx * inv;
+                            pushDirZ = ndz * inv;
+                        }
+                        else
+                        {
+                            pushDirX = 1f;
+                            pushDirZ = 0f;
+                        }
+
+                        displayPos = new Vector3(
+                            displayPos.x + pushDirX * overlap * _pushStrength,
+                            networkPos.y,
+                            displayPos.z + pushDirZ * overlap * _pushStrength);
+                    }
                 }
                 else
                 {
-                    offset = Vector2.zero;
+                    // ── Decay phase ───────────────────────────────────────────────────
+                    // Server has already pushed the NPC outside the circle.  Smoothly
+                    // return the visual position to the server-authoritative position.
+                    displayPos = Vector3.MoveTowards(displayPos, networkPos, step);
+
+                    float convDx = displayPos.x - networkPos.x;
+                    float convDz = displayPos.z - networkPos.z;
+                    if (convDx * convDx + convDz * convDz < CONVERGENCE_THRESHOLD_SQUARED)
+                    {
+                        _separationKeysToRemove.Add(key);
+                        npcTransform.position = networkPos;
+                        continue;
+                    }
                 }
 
-                // ── Step 2: compute candidate display position ────────────────────────
-                Vector3 displayPos = new Vector3(
-                    networkPos.x + offset.x,
-                    networkPos.y,
-                    networkPos.z + offset.y);
-
-                // ── Step 3: constrain display position outside the exclusion circle ───
-                float ddx         = displayPos.x - playerPos.x;
-                float ddz         = displayPos.z - playerPos.z;
-                float displayDistSq = ddx * ddx + ddz * ddz;
-
-                if (displayDistSq < combinedSq)
-                {
-                    // Determine push direction: prefer the current offset direction, fall
-                    // back to the network-position direction, then a stable default.
-                    Vector2 pushDir2D;
-                    if (offset.sqrMagnitude > EPSILON_SQUARED)
-                    {
-                        pushDir2D = offset.normalized;
-                    }
-                    else if (netDistSq > EPSILON_SQUARED)
-                    {
-                        float invNetDist = 1f / Mathf.Sqrt(netDistSq);
-                        pushDir2D = new Vector2(ndx * invNetDist, ndz * invNetDist);
-                    }
-                    else
-                    {
-                        pushDir2D = Vector2.right;
-                    }
-
-                    displayPos = new Vector3(
-                        playerPos.x + pushDir2D.x * combined,
-                        networkPos.y,
-                        playerPos.z + pushDir2D.y * combined);
-
-                    offset = new Vector2(displayPos.x - networkPos.x, displayPos.z - networkPos.z);
-                }
-
-                // ── Step 4: check convergence ─────────────────────────────────────────
-                if (offset.sqrMagnitude < CONVERGENCE_THRESHOLD_SQUARED)
-                {
-                    _separationKeysToRemove.Add(key);
-                    npcTransform.position = networkPos;
-                    continue;
-                }
-
-                _npcSeparationOffsets[key] = offset;
-                npcTransform.position      = displayPos;
+                _npcDisplayPositions[key] = displayPos;
+                npcTransform.position     = displayPos;
             }
 
-            // Remove converged entries outside the foreach to avoid modifying while iterating.
             for (int i = 0; i < _separationKeysToRemove.Count; i++)
-                _npcSeparationOffsets.Remove(_separationKeysToRemove[i]);
+                _npcDisplayPositions.Remove(_separationKeysToRemove[i]);
         }
 
         // RENDER UPDATE
@@ -594,7 +590,7 @@ namespace VoidRogues.NonPlayerCharacters
 
         private void ReturnView(int index, NPCViewEntry entry)
         {
-            _npcSeparationOffsets.Remove(index);
+            _npcDisplayPositions.Remove(index);
 
             if (entry.NPC != null)
             {
