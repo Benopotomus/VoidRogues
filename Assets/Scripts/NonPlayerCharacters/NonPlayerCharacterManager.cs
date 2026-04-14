@@ -42,6 +42,50 @@ namespace VoidRogues.NonPlayerCharacters
         // derive a reliable push direction from their delta.
         private const float DISTANCE_EPSILON = 1e-4f;
 
+        [Header("Client Predictive Separation – Smoothing")]
+        [SerializeField]
+        [Tooltip("Repulsion force applied per unit of penetration depth when an NPC's display " +
+                 "position is inside the exclusion circle (units/s² per unit of overlap). " +
+                 "Higher values push NPCs out faster; lower values give a gentler, slower push.")]
+        private float _separationPushForce = 40f;
+
+        [SerializeField]
+        [Tooltip("Scales the lateral flocking force relative to the main push force. " +
+                 "0.1 = flocking nudge is 10 % of the push; increase for more aggressive sideways spreading.")]
+        private float _npcFlockingForceScale = 0.1f;
+
+        [SerializeField]
+        [Tooltip("Radius within which two pushed NPCs repel each other, " +
+                 "causing them to spread sideways instead of piling up (world units).")]
+        private float _npcFlockingRadius = 1.2f;
+
+        [SerializeField]
+        [Tooltip("Spring stiffness used when reconciling a pushed NPC's display position back to the " +
+                 "network position. Higher values snap the NPC back more quickly. Tuned alongside " +
+                 "_reconcileSpringDamping for critical damping (no oscillation).")]
+        private float _reconcileSpringStrength = 25f;
+
+        [SerializeField]
+        [Tooltip("Velocity damping coefficient applied per second during spring reconciliation. " +
+                 "Higher values reduce overshoot; lower values allow a small arc before settling. " +
+                 "For critical damping use damping ≈ 2 * sqrt(strength).")]
+        private float _reconcileSpringDamping = 10f;
+
+        // Squared convergence threshold: when a decaying display position is within this
+        // distance² of the network position and velocity is near zero, the entry is removed.
+        private const float CONVERGENCE_THRESHOLD_SQUARED         = 0.01f;
+        private const float CONVERGENCE_VELOCITY_THRESHOLD_SQUARED = 0.04f;
+
+        // Tracks the visual (display) XZ position of each NPC that is currently being
+        // pushed by the client predictive separation pass.  Keyed by the same view index
+        // used in _views.  Entries exist only while an NPC is inside (or recently exited)
+        // the exclusion circle.
+        private Dictionary<int, Vector3>  _npcDisplayPositions  = new Dictionary<int, Vector3>(NonPlayerCharacterConstants.MAX_NPC_REPS);
+
+        // XZ display velocity (world units/second) per NPC, maintained across frames so that
+        // the spring reconciliation can smoothly blend outward push momentum into the return arc.
+        private Dictionary<int, Vector2>  _npcDisplayVelocities = new Dictionary<int, Vector2>(NonPlayerCharacterConstants.MAX_NPC_REPS);
+
         [Networked, Capacity(NonPlayerCharacterConstants.MAX_NPC_REPS)]
         private NetworkArray<FNonPlayerCharacterData> _npcDatas { get; }
 
@@ -321,6 +365,168 @@ namespace VoidRogues.NonPlayerCharacters
             }
         }
 
+        /// <summary>
+        /// Visual-only separation pass run on non-authority clients each render frame.
+        ///
+        /// <para>
+        /// Uses continuous physics integration — no discrete phases, no position snapping —
+        /// so NPCs flow smoothly around the player like water.  A proportional repulsion
+        /// force accelerates an NPC's display position out of the exclusion circle while the
+        /// server authoritative separation is still travelling across the network.  Once the
+        /// server position exits the circle a damped spring pulls the display position back.
+        /// RVO-style flocking spreads NPCs sideways so they do not pile up radially.
+        /// </para>
+        ///
+        /// <para>
+        /// No <see cref="FNonPlayerCharacterData"/> fields are mutated; all adjustments are
+        /// purely cosmetic and scoped to the NPC's <c>Transform</c>.
+        /// </para>
+        /// </summary>
+        private void ApplyPredictiveClientSeparation()
+        {
+            PlayerCharacter localPlayer = Context?.LocalPlayerCharacter;
+            if (localPlayer == null)
+                return;
+
+            float combined   = _playerSeparationRadius + _npcSeparationRadius + _separationSkinWidth;
+            float combinedSq = combined * combined;
+            float dt         = Time.deltaTime;
+
+            Vector3 playerPos = localPlayer.transform.position;
+
+            float dampFactor = Mathf.Exp(-_reconcileSpringDamping * dt);
+            float flockRadSq = _npcFlockingRadius * _npcFlockingRadius;
+
+            foreach (KeyValuePair<int, NPCViewEntry> pair in _views)
+            {
+                NPCViewEntry entry = pair.Value;
+                if (entry.LoadState != ELoadState.Loaded || entry.NPC == null)
+                    continue;
+
+                int       key          = pair.Key;
+                Transform npcTransform = entry.NPC.CachedTransform;
+                Vector3   networkPos   = npcTransform.position;   // interpolated from server snapshots
+
+                float ndx      = networkPos.x - playerPos.x;
+                float ndz      = networkPos.z - playerPos.z;
+                bool  netInside = (ndx * ndx + ndz * ndz) < combinedSq;
+
+                bool hasDisplay = _npcDisplayPositions.TryGetValue(key, out Vector3 displayPos);
+                _npcDisplayVelocities.TryGetValue(key, out Vector2 vel);
+
+                if (!hasDisplay)
+                {
+                    if (!netInside)
+                        continue;   // NPC is clear of the circle and not tracked.
+
+                    // Seed the display position at the network position so force integration
+                    // pushes it out smoothly — no snap to the boundary.
+                    displayPos = networkPos;
+                    vel        = Vector2.zero;
+                }
+
+                // ── 1. Repulsion force (display position inside exclusion circle) ────────────
+                // Proportional to penetration depth: the deeper the overlap the harder the
+                // push, producing a smooth acceleration from rest with no abrupt jump.
+                float ddx      = displayPos.x - playerPos.x;
+                float ddz      = displayPos.z - playerPos.z;
+                float dispDist = Mathf.Sqrt(ddx * ddx + ddz * ddz);
+                float overlap  = combined - dispDist;
+                if (overlap > 0f)
+                {
+                    float outDirX, outDirZ;
+                    if (dispDist > DISTANCE_EPSILON)
+                    {
+                        float inv = 1f / dispDist;
+                        outDirX   = ddx * inv;
+                        outDirZ   = ddz * inv;
+                    }
+                    else
+                    {
+                        // Display position is exactly on the player.  Use the network→away
+                        // direction as the push axis so overlapping NPCs naturally diverge
+                        // rather than all snapping to the same arbitrary axis.
+                        float ndMag = Mathf.Sqrt(ndx * ndx + ndz * ndz);
+                        if (ndMag > DISTANCE_EPSILON)
+                        {
+                            float inv = 1f / ndMag;
+                            outDirX   = ndx * inv;
+                            outDirZ   = ndz * inv;
+                        }
+                        else
+                        {
+                            outDirX = 1f;
+                            outDirZ = 0f;
+                        }
+                    }
+
+                    float pushMag = overlap * _separationPushForce;
+                    vel.x += outDirX * pushMag * dt;
+                    vel.y += outDirZ * pushMag * dt;
+                }
+
+                // ── 2. RVO-style flocking: spread NPCs sideways ───────────────────────────────
+                // Gentle lateral repulsion between NPCs so they fan outward instead of stacking.
+                float avoidX = 0f, avoidZ = 0f;
+                foreach (KeyValuePair<int, Vector3> otherPair in _npcDisplayPositions)
+                {
+                    if (otherPair.Key == key)
+                        continue;
+
+                    float ex     = displayPos.x - otherPair.Value.x;
+                    float ez     = displayPos.z - otherPair.Value.z;
+                    float distSq = ex * ex + ez * ez;
+                    if (distSq < flockRadSq && distSq > EPSILON_SQUARED)
+                    {
+                        float dist   = Mathf.Sqrt(distSq);
+                        float weight = (_npcFlockingRadius - dist) / _npcFlockingRadius;
+                        avoidX += (ex / dist) * weight;
+                        avoidZ += (ez / dist) * weight;
+                    }
+                }
+
+                float flockScale = _separationPushForce * _npcFlockingForceScale;
+                vel.x += avoidX * flockScale * dt;
+                vel.y += avoidZ * flockScale * dt;
+
+                // ── 3. Spring reconciliation (server has resolved the separation) ─────────────
+                // Pull the display position back toward the network position once the server
+                // authoritative push has landed.  Applying the spring only then means it never
+                // fights the outward repulsion while the server correction is still in flight.
+                if (!netInside)
+                {
+                    vel.x += (networkPos.x - displayPos.x) * _reconcileSpringStrength * dt;
+                    vel.y += (networkPos.z - displayPos.z) * _reconcileSpringStrength * dt;
+                }
+
+                // ── 4. Velocity damping ────────────────────────────────────────────────────────
+                vel.x *= dampFactor;
+                vel.y *= dampFactor;
+
+                // ── 5. Integrate position ──────────────────────────────────────────────────────
+                displayPos.x += vel.x * dt;
+                displayPos.z += vel.y * dt;
+
+                // ── 6. Convergence check (only meaningful once the server has resolved) ────────
+                if (!netInside)
+                {
+                    float ex2 = displayPos.x - networkPos.x;
+                    float ez2 = displayPos.z - networkPos.z;
+                    if (ex2 * ex2 + ez2 * ez2 < CONVERGENCE_THRESHOLD_SQUARED &&
+                        vel.x * vel.x + vel.y * vel.y < CONVERGENCE_VELOCITY_THRESHOLD_SQUARED)
+                    {
+                        _npcDisplayPositions.Remove(key);
+                        _npcDisplayVelocities.Remove(key);
+                        continue;
+                    }
+                }
+
+                _npcDisplayPositions[key] = displayPos;
+                _npcDisplayVelocities[key] = vel;
+                npcTransform.position      = new Vector3(displayPos.x, networkPos.y, displayPos.z);
+            }
+        }
+
         // RENDER UPDATE
         // RENDER - Cleaned up to match ProjectilePool style
         public override void Render()
@@ -422,6 +628,13 @@ namespace VoidRogues.NonPlayerCharacters
                 }
             }
 
+            // === 5. Predictive client-side separation ===
+            // Apply a visual-only push of NPC transforms away from the locally-predicted
+            // player position.  This runs only on non-authority clients and compensates
+            // for the ~RTT delay before the server-authoritative separation arrives.
+            if (!hasAuthority)
+                ApplyPredictiveClientSeparation();
+
             _viewCount = fromDataCount;
         }
 
@@ -433,6 +646,10 @@ namespace VoidRogues.NonPlayerCharacters
                 npc.StartRecycle();
                 OnCharacterDespawned?.Invoke(npc);
             }
+
+            // Clear all client-side predictive state so recycled indices start fresh.
+            _npcDisplayPositions.Remove(index);
+            _npcDisplayVelocities.Remove(index);
         }
 
         private class NPCViewEntry

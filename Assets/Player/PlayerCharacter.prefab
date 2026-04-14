@@ -122,7 +122,6 @@ GameObject:
   - component: {fileID: 6629542650854497122}
   - component: {fileID: 7740653761965408233}
   - component: {fileID: 6075634693445208351}
-  - component: {fileID: 8851765873098635412}
   m_Layer: 0
   m_Name: PlayerCharacter
   m_TagString: Untagged
@@ -166,7 +165,6 @@ MonoBehaviour:
   - {fileID: 5518431539743586011}
   - {fileID: 6629542650854497122}
   - {fileID: 7740653761965408233}
-  - {fileID: 8851765873098635412}
   ForceRemoteRenderTimeframe: 0
 --- !u!54 &4407320428632674900
 Rigidbody:
@@ -404,23 +402,3 @@ MonoBehaviour:
   movementPlaneSourceBacking: 0
   syncPosition: 1
   syncRotation: 1
---- !u!114 &8851765873098635412
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1074987095299941567}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 800992b7cc0a406c8f9df52d7ed69806, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  _playerSeparationRadius: 0.35
-  _npcSeparationRadius: 0.4
-  _separationSkinWidth: 0.02
-  _separationPushForce: 40
-  _npcFlockingForceScale: 0.1
-  _npcFlockingRadius: 1.2
-  _reconcileSpringStrength: 25
-  _reconcileSpringDamping: 10
