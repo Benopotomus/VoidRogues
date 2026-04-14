@@ -105,12 +105,6 @@ namespace VoidRogues
         // Reusable list for collecting keys to remove, to avoid mutating the dict during iteration.
         private readonly List<NonPlayerCharacter> _toRemove = new List<NonPlayerCharacter>();
 
-        // Snapshot of _displayPositions taken at the start of each separation pass.
-        // Iterating over this snapshot lets us safely write back to _displayPositions and also
-        // gives the flocking inner loop consistent start-of-frame positions (correct RVO behaviour).
-        private readonly Dictionary<NonPlayerCharacter, Vector3> _displayPositionsSnapshot =
-            new Dictionary<NonPlayerCharacter, Vector3>();
-
         // ── NetworkBehaviour lifecycle ────────────────────────────────────────────────
 
         public override void Despawned(NetworkRunner runner, bool hasState)
@@ -161,19 +155,8 @@ namespace VoidRogues
             // ── 2. Process all tracked NPCs ───────────────────────────────────────────
             // Includes both NPCs currently inside the circle AND those decaying back to
             // their network positions after the server separation has landed.
-            //
-            // We snapshot _displayPositions before iterating so that:
-            //   a) writes back to _displayPositions during the loop are safe (we are
-            //      enumerating the snapshot, not the live dictionary), and
-            //   b) the inner flocking pass reads consistent start-of-frame positions
-            //      (correct RVO behaviour — each NPC sees where its neighbours *were*,
-            //      not where they have already moved to this frame).
-            _displayPositionsSnapshot.Clear();
-            foreach (KeyValuePair<NonPlayerCharacter, Vector3> kvp in _displayPositions)
-                _displayPositionsSnapshot[kvp.Key] = kvp.Value;
-
             _toRemove.Clear();
-            foreach (KeyValuePair<NonPlayerCharacter, Vector3> pair in _displayPositionsSnapshot)
+            foreach (KeyValuePair<NonPlayerCharacter, Vector3> pair in _displayPositions)
             {
                 NonPlayerCharacter npc = pair.Key;
 
@@ -238,7 +221,7 @@ namespace VoidRogues
                 // Gentle lateral repulsion between NPCs so they fan outward instead of
                 // stacking radially.
                 float avoidX = 0f, avoidZ = 0f;
-                foreach (KeyValuePair<NonPlayerCharacter, Vector3> otherPair in _displayPositionsSnapshot)
+                foreach (KeyValuePair<NonPlayerCharacter, Vector3> otherPair in _displayPositions)
                 {
                     if (otherPair.Key == npc)
                         continue;
