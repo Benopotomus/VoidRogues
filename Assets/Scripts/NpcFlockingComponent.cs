@@ -122,13 +122,10 @@ namespace VoidRogues
 
         private void LateUpdate()
         {
-            // Run only on the machine that controls this PlayerCharacter (HasInputAuthority).
-            // We deliberately do NOT check HasStateAuthority here: in Shared mode (GameMode.Shared)
-            // each player has state authority over their own PlayerCharacter, so requiring
-            // !HasStateAuthority would silently disable predictive separation for every player.
-            // The separation is still useful in Shared mode because NPC positions are owned by the
-            // master client, not the local player, so there is still network latency to compensate.
-            if (Runner == null || !HasInputAuthority)
+            // Run only on the local player's character on a non-authoritative client.
+            // HasInputAuthority: this client controls this NetworkObject.
+            // !HasStateAuthority: we are a client, not the server holding authoritative state.
+            if (Runner == null || !HasInputAuthority || HasStateAuthority)
                 return;
 
             ApplyPredictiveClientSeparation();
