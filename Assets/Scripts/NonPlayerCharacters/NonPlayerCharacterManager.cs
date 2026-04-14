@@ -205,22 +205,6 @@ namespace VoidRogues.NonPlayerCharacters
             return null;
         }
 
-        /// <summary>
-        /// Invokes <paramref name="callback"/> for every fully-loaded NPC view.
-        /// Used by <see cref="NpcFlockingComponent"/> to seed the client-side predictive
-        /// separation pass via direct transform-position distance checks, avoiding any
-        /// dependency on the physics broadphase which lags behind visual transform updates.
-        /// </summary>
-        public void ForEachActiveNPC(System.Action<NonPlayerCharacter> callback)
-        {
-            foreach (var pair in _views)
-            {
-                var entry = pair.Value;
-                if (entry.LoadState == ELoadState.Loaded && entry.NPC != null)
-                    callback(entry.NPC);
-            }
-        }
-
         public int GetFreeIndex()
         {
             for (int i = 0; i < NonPlayerCharacterConstants.MAX_NPC_REPS; i++)
